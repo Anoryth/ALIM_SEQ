@@ -110,7 +110,7 @@ versionnage [SemVer](https://semver.org/lang/fr/).
   combiner des sources décrites en `supplies` (legacy) ET des instruments en
   `instruments` (ex. relais) sans que les unes masquent les autres : les deux sont
   fusionnées (`AppConfig.__post_init__`), les entrées `instruments` explicites primant.
-- **Pilotage de relais / actionneurs** (capacité `Actionneur`, ROADMAP §4). Nouveau
+- **Pilotage de relais / actionneurs** (capacité `Actionneur`). Nouveau
   driver `alim_seq/relay.py` (`BaseRelay`/`MockRelay`). Un relais se déclare comme un
   instrument de la section `instruments` (driver `MOCK-RELAY`) avec ses `outputs` ;
   chaque sortie a un `safe_state` (défaut OFF/ouvert). Nouvelle commande de séquence

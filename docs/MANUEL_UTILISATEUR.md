@@ -150,7 +150,7 @@ livrée par défaut définit deux voies génériques `CH1` et `CH2`.*
    disparaît.
 4. Cliquer **OFF** — le bouton passe à **ON** (vert) : la voie débite. Les colonnes
    « V mesurée / I mesurée » s'animent.
-5. Onglet **Éditeur de séquence** : ouvrir `sequences/exemple.seq`, cliquer
+5. Onglet **Éditeur de séquence** : ouvrir `sequences/demo.seq`, cliquer
    **Vérifier** (contrôle complet de la syntaxe, des voies et des valeurs), puis
    **Exécuter**. Suivre la progression (barre de progression, ligne courante
    surlignée dans l'éditeur).

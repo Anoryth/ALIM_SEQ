@@ -81,7 +81,7 @@ périphérique meurt). À valider après installation, sur un vrai Windows :
 2. **Icône de fenêtre présente** dans la barre des tâches et le titre — **canari
    des `imageformats`** (l'icône `.ico` doit se charger).
 3. **Enregistrement + séquence** : lancer un enregistrement, exécuter
-   `exemple.seq`, la laisser finir.
+   `demo.seq`, la laisser finir.
 4. **Rapport** : générer le rapport d'essai → le **PDF contient les graphiques**
    V/I et températures (**canari des exclusions matplotlib / mpl-data**) et
    s'ouvre correctement, texte lisible (police DejaVu).

@@ -46,8 +46,6 @@ Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-; Choix de l'interface : cochee = Qt (moderne) ; decochee = Tkinter (legere).
-Name: "guiqt"; Description: "Interface graphique Qt (moderne, recommandee) — decochez pour l'interface Tkinter legere"; GroupDescription: "Interface graphique :"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
@@ -72,17 +70,13 @@ Name: "{code:GetDataDir}\logs"; Flags: uninsneveruninstall
 Root: HKA; Subkey: "Software\ALIM_SEQ"; ValueType: string; ValueName: "DataDir"; ValueData: "{code:GetDataDir}"; Flags: uninsdeletekey
 
 [Icons]
-; Raccourci Qt (aucun parametre : le lanceur demarre en Qt par defaut).
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: guiqt
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon and guiqt
-; Raccourci Tkinter (--gui tk : le lanceur respecte ce choix).
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--gui tk"; Tasks: not guiqt
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--gui tk"; Tasks: desktopicon and not guiqt
+; L'application demarre en Qt (unique interface, aucun parametre).
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent; Tasks: guiqt
-Filename: "{app}\{#AppExe}"; Parameters: "--gui tk"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent; Tasks: not guiqt
+Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 { Page supplementaire : ou ranger les DONNEES (config.json, journaux, essais). }
