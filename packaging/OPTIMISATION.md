@@ -16,7 +16,7 @@ ALIM_SLIM=0 pyinstaller --noconfirm --clean packaging/ALIM_SEQ.spec
 python packaging/taille_dist.py dist/ALIM_SEQ            # -> tailles "avant" (baseline)
 ```
 
-`ALIM_SLIM=0` désactive **uniquement** le dégraissage de cette mission (backends
+`ALIM_SLIM=0` désactive **uniquement** le dégraissage optionnel décrit ici (backends
 matplotlib, filtrage `mpl-data`, DLL/plugins Qt) ; les exclusions Qt de base
 (`_QT_HEAVY` : WebEngine, Quick/Qml, Multimedia, Charts, QtNetwork, QtSql, QtPdf…)
 restent dans les deux cas (elles étaient déjà validées sur la version onefile).
@@ -30,7 +30,7 @@ planter — garde-fou contre une exclusion trop agressive).
 | Famille | Ce qui est retiré | Pourquoi c'est sûr |
 |---|---|---|
 | **matplotlib backends** | tous les backends interactifs et ponts (`backend_qtagg`, `qt5agg`, `qt6agg`, `tkagg`, `gtk*`, `wx*`, `macosx`, `webagg`, `nbagg`, `qt_compat`) | le code n'importe que `matplotlib.figure` + `FigureCanvasAgg`. `backend_agg` **conservé**. |
-| **tkinter** | `tkinter`, `_tkinter` | aspirés par le hook matplotlib (`backend_tkagg`) ; l'app empaquetée est **Qt-only** (le launcher force `--gui qt`). |
+| **tkinter** | `tkinter`, `_tkinter` | aspirés par le hook matplotlib (`backend_tkagg`) ; l'app empaquetée est **Qt-only**. |
 | **tests** | `matplotlib.tests`, `numpy.tests` | jamais exécutés au runtime. |
 | **mpl-data** | `sample_data/`, `fonts/pdfcorefonts/`, `fonts/afm/` | métriques des backends PostScript/PDF (non utilisés par Agg) + jeux d'exemple. **Toutes les polices `fonts/ttf/` sont conservées** : ne garder que DejaVu Sans cassait le rendu matplotlib sur le build installé (v1.1.0 → corrigé en 1.1.1). |
 | **Qt modules** | `_QT_HEAVY` + `QtUiTools` ; `QtPdf` exclu (⚠ `QPdfWriter` est dans **QtGui**, vérifié) ; `QtNetwork` exclu (rien ne l'aspire) | déjà validé sur la version onefile testée. |
@@ -56,7 +56,7 @@ Builds Windows produits en CI (`taille_dist.py`). Baseline = `ALIM_SLIM=0`.
 > Mesure ci-dessus faite en v1.1.0. En **1.1.1**, le jeu de polices `mpl-data`
 > complet (40 `.ttf`) est réintégré (correctif « polices manquantes ») :
 > total **143,8 Mio**, soit un gain net ramené à **~−20 %** (−36,9 Mio).
-| Installateur (`ALIM_SEQ-Setup.exe`, lzma2) | — | **≈ 46 Mo** | (79 Mo en onefile avant la mission) |
+| Installateur (`ALIM_SEQ-Setup.exe`, lzma2) | — | **≈ 46 Mo** | (79 Mo en onefile avant dégraissage) |
 
 Détail par famille (sous-dossiers de `_internal/`) :
 
