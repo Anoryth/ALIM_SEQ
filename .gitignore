@@ -37,3 +37,7 @@ docs/MANUEL_UTILISATEUR.pdf
 
 # Config locale de Claude Code (non distribuée)
 .claude/
+
+# Note de conception interne (planification par phases + renvois ROADMAP) —
+# gardée en local mais hors release publique.
+docs/DESIGN_INSTRUMENTS.md

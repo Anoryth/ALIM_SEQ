@@ -1,4 +1,4 @@
-"""Phase 1 de l'abstraction par capacités (docs/DESIGN_INSTRUMENTS.md).
+"""Abstraction des appareils par capacités (cf. docs/ARCHITECTURE.md §5).
 
 On vérifie que les drivers existants exposent les bonnes capacités, que le registre
 unifié / la fabrique fonctionnent, et surtout que la parité simulation est préservée.

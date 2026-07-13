@@ -1,4 +1,4 @@
-"""Réglage à chaud de la simulation (ROADMAP §5) : charges, thermique, couplages."""
+"""Réglage à chaud de la simulation : charges, thermique, couplages."""
 
 from alim_seq.controller import Controller
 

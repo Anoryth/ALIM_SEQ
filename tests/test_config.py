@@ -41,7 +41,7 @@ def test_source_path_none_for_code_built_config():
     assert cfg.source_path is None
 
 
-# --- Section unifiée 'instruments' (phase 3, docs/DESIGN_INSTRUMENTS.md) ---------
+# --- Section unifiée 'instruments' (classée par capacité via son 'driver') -------
 def test_legacy_supplies_daq_derive_instruments(tmp_path):
     """Une config héritée (supplies+daq) produit une section 'instruments' cohérente."""
     raw = json.loads(json.dumps(_BASE))

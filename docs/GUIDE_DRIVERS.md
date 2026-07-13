@@ -5,8 +5,8 @@ Ce guide s'adresse aux **contributeurs** qui veulent brancher un nouvel appareil
 L'architecture est conçue pour que **le reste de l'application s'adapte
 automatiquement** : config, IHM, séquenceur, simulation, validation.
 
-Pour l'architecture d'ensemble, voir [ARCHITECTURE.md](ARCHITECTURE.md) ; pour la
-conception du modèle par capacités, [DESIGN_INSTRUMENTS.md](DESIGN_INSTRUMENTS.md).
+Pour l'architecture d'ensemble et la conception du modèle par capacités, voir
+[ARCHITECTURE.md](ARCHITECTURE.md) (§5, *Pilotes matériel et simulation*).
 
 ---
 
@@ -256,5 +256,4 @@ Le reste — config, IHM, séquenceur, assistant, rapport — s'adapte **tout se
 > Rugosité connue : enregistrer une **source** ne demande qu'une ligne dans
 > `PSU_MODELS` ; une capacité **température/actionneur** demande encore d'éditer la
 > branche correspondante de `create_instrument`. Uniformiser cela (un registre de
-> familles piloté par métadonnées) est un chantier ouvert bienvenu — voir
-> `DESIGN_INSTRUMENTS.md`.
+> familles piloté par métadonnées) est un chantier ouvert bienvenu.

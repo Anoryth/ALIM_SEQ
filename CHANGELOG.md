@@ -141,7 +141,7 @@ versionnage [SemVer](https://semver.org/lang/fr/).
   `PSUManager` est **supprimé**. Le contrôleur construit désormais ses instruments
   depuis la section `instruments` (chaque entrée classée par capacité via son
   `driver`), ce qui permettra d'ajouter les relais sans toucher au cœur. Prépare la
-  modularité de la chaîne d'appareils (voir `docs/DESIGN_INSTRUMENTS.md`).
+  modularité de la chaîne d'appareils.
 
 ### Changé
 - **Suppression de l'IHM Tkinter.** L'interface **Qt (PySide6)** devient l'unique

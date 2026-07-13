@@ -1,4 +1,4 @@
-"""Abstraction des appareils **par capacités** (cf. docs/DESIGN_INSTRUMENTS.md).
+"""Abstraction des appareils **par capacités** (cf. docs/ARCHITECTURE.md §5).
 
 Un appareil n'est plus catégorisé (« une alim », « un DAQ ») : il **déclare les
 capacités** qu'il expose. Le contrôleur ne parle qu'aux capacités et découvre « qui
@@ -84,8 +84,8 @@ class MesureTemperature(Capability):
 class Actionneur(Capability):
     """Sait ouvrir/fermer une sortie logique par label (relais, GPIO, commutateur).
 
-    Réservé à ROADMAP §4. Peut participer à la désalimentation ordonnée (ouvrir un
-    relais pour isoler la carte fait partie de l'extinction sûre).
+    Peut participer à la désalimentation ordonnée (ouvrir un relais pour isoler la
+    carte fait partie de l'extinction sûre). Voir `relay.py`.
     """
 
     def set_state(self, label: str, on: bool) -> None: ...
@@ -107,7 +107,7 @@ def capabilities_of(instr: object) -> List[str]:
 # Alias de driver pour le module de température NI (insensible à la casse/tirets).
 _NIDAQ_ALIASES = {"NI-DAQ", "NIDAQ", "NI", "NI-DAQMX", "NIDAQMX"}
 # Drivers d'actionneurs (relais). Seul le mock est fourni pour l'instant ; un modèle
-# matériel réel s'ajoutera ici (cf. relay.py, ROADMAP §4).
+# matériel réel s'ajoutera ici (cf. relay.py).
 _RELAY_DRIVERS = {"MOCK-RELAY", "MOCKRELAY"}
 
 

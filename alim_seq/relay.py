@@ -2,8 +2,8 @@
 
 Un relais expose des **sorties nommées** (labels) que l'on ouvre/ferme
 individuellement. C'est la première capacité *neuve* posée sur l'abstraction par
-capacités (cf. docs/DESIGN_INSTRUMENTS.md, ROADMAP §4) : elle s'ajoute sans toucher
-au cœur du contrôleur.
+capacités (cf. docs/ARCHITECTURE.md §5) : elle s'ajoute sans toucher au cœur du
+contrôleur.
 
 - :class:`BaseRelay`  : interface commune (sorties par label).
 - :class:`MockRelay`  : relais simulé (état en mémoire). Sert la parité simulation

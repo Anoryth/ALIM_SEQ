@@ -1,4 +1,4 @@
-"""Phase 4 : relais (capacité Actionneur). Cf. docs/DESIGN_INSTRUMENTS.md, ROADMAP §4."""
+"""Relais (capacité Actionneur) : sorties par label, safe_state, désalimentation."""
 
 import json
 

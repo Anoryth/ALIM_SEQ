@@ -32,23 +32,32 @@ Principes de conception :
 main.py                  point d'entrée : arguments, choix IHM, chargement config
 alim_seq/
   config.py              schéma (dataclasses) + load_config + validation
+  instrument.py          abstraction par capacités (SourceTension/MesureVI/…),
+                         registre INSTRUMENTS + fabrique create_instrument
   psu.py                 pilotes alimentation : BasePSU, HMP4040 & variantes,
                          MockPSU, registre PSU_MODELS, routage par label
   daq.py                 acquisition NI : NIDaq (nidaqmx) + MockDAQ (modèle thermique)
+  relay.py               actionneurs (BaseRelay/MockRelay), sorties par label + safe_state
   temperature.py         convertisseurs tension→°C (table/poly/ntc/ptc/identity/tc)
   expressions.py         évaluateur d'expressions sûr (SETV/SETI)
   sequencer.py           analyse + exécution des séquences .seq (interruptible)
-  controller.py          orchestration : boucles mesure & sécurité, servo, trip
+  controller.py          orchestration : boucles mesure & sécurité, trip, lifecycle
+  controller_recording.py  RecordingMixin : enregistrement d'essai (start/stop, lignes CSV)
+  controller_servo.py    ServoMixin : asservissement linéaire / adaptatif
+  controller_simtune.py  SimTuneMixin : réglage à chaud du banc simulé (charges, couplages)
   essai.py               dossier d'essai autonome (CSV + artefacts)
   rapport.py             rapport d'essai : données + HTML (pur Python) → PDF (ReportLab) + graphes (matplotlib)
   gui_qt/                IHM Qt/PySide6 (unique interface)
     main_window.py       fenêtre, onglets, menus, barre de sécurité, aide (F1)
     config_tab.py        édition de config (formulaires + JSON avancé)
-    editor.py            éditeur de séquence (coloration, auto-complétion, vérif.)
+    config_wizard.py     assistant de configuration (proposé au 1er lancement)
+    editor.py            éditeur de séquence (coloration, auto-complétion, lint en direct)
     plot.py              onglet Graphe (températures/courants/tensions)
+    replay.py            relecture d'un essai enregistré + comparaison de deux essais
+    sim_tab.py           onglet Simulation : réglage à chaud du banc virtuel (SimMixin)
     converter.py         assistant convertisseur de température (courbe live)
     workers.py           tâches matérielles en fil de fond (connexion, scan VISA)
-    theme.py, widgets.py thème sombre, widgets bornés (saisies)
+    theme.py, widgets.py thème sombre, widgets bornés (saisies, armement 2 temps)
 packaging/launcher.py    point d'entrée empaqueté : dossier de données + chdir
 ```
 
@@ -101,6 +110,13 @@ sequencer                 → actions → Controller (SET/ON/RAMP/SERVO…) → 
 - journalise (`enable_file_logging` → `logs/alim_seq.log`, rotation) et alimente
   l'enregistrement d'essai.
 
+**Décomposition en mixins.** Le cœur sûreté (boucles mesure/sécurité, verrous,
+lifecycle connect/reconnect, escalade, `emergency_stop`, `snapshot`) reste dans
+`controller.py`. La périphérie cohésive est extraite en **mixins** partageant le
+même `self` — donc sans changement de comportement (`class Controller(RecordingMixin,
+ServoMixin, SimTuneMixin)`) : `RecordingMixin` (enregistrement d'essai),
+`ServoMixin` (asservissement) et `SimTuneMixin` (réglage à chaud du banc simulé).
+
 **Asservissement (servo).** Monte/descend la tension d'une voie *réglée* jusqu'à
 obtenir un courant cible sur une voie *mesurée*. Deux stratégies : `SERVO_LIN`
 (pas fixe) et `SERVO_ADAPT` (pas adaptatif type sécante/Newton — grand pas loin de
@@ -118,7 +134,8 @@ inférence V/I (hystérésis) si le firmware ne répond pas.
 qu'il sait faire (`SourceTension`, `MesureVI`, `MesureTemperature`, `Actionneur`)
 au lieu d'être catégorisé. Registre unifié `INSTRUMENTS` / fabrique
 `create_instrument`. Le `Controller` pilote *par capacité* et route chaque **label**
-de voie vers `(instrument, canal)` physique. Voir `docs/DESIGN_INSTRUMENTS.md`.
+de voie vers `(instrument, canal)` physique. Pour **intégrer un nouvel appareil**,
+voir [GUIDE_DRIVERS.md](GUIDE_DRIVERS.md).
 
 `psu.py` — interface commune `BasePSU` (capacités `SourceTension`+`MesureVI`) ;
 `HMP4040` (et sous-classes `HMP4030` / `HMP2030` / `HMP2020` : mêmes commandes SCPI,
@@ -162,7 +179,7 @@ ce qui permet de **valider le déclenchement de la sécurité**.
   `max_voltage`/`max_current`.
 
 Commandes : `SET/VOLTAGE/CURRENT`, `SETV/SETI`, `ON/OFF`, `WAIT`, `RAMP`,
-`SERVO_LIN/SERVO_ADAPT`, `WAIT_CURRENT`, `WAIT_TEMP`, `LOG`, `ALL_OFF`,
+`SERVO_LIN/SERVO_ADAPT`, `WAIT_CURRENT`, `WAIT_TEMP`, `RELAY`, `LOG`, `ALL_OFF`,
 `SHUTDOWN`, `REPEAT/END`. Référence complète : Annexe A du manuel (et menu Aide de
 l'app).
 
@@ -245,13 +262,24 @@ graphiques.
 ## 11. IHM
 
 L'IHM **Qt/PySide6** (`gui_qt/`) est l'unique interface, branchée sur le
-`Controller` : onglets Contrôle / Configuration / Éditeur de séquence / Graphe ;
-**barre de sécurité permanente** (Arrêt d'urgence, Séquentiel d'arrêt, Réarmer,
-Tout OFF, badge de mode) ; saisies **bornées** par la config (jaune = non
-appliqué) ; configuration éditable par **formulaires + JSON avancé** synchronisés ;
-**assistant convertisseur** (courbe live) ; graphe commutable avec curseur de
-lecture ; workers en fond ; aide intégrée (**F1** → manuel, référence des commandes,
-raccourcis).
+`Controller` : onglets Contrôle / Configuration / Éditeur de séquence / Graphe /
+**Simulation** (ce dernier en mode simulé) ; **barre de sécurité permanente** (Arrêt
+d'urgence, Séquentiel d'arrêt, Réarmer, Tout OFF, badge de mode) ; saisies **bornées**
+par la config (jaune = non appliqué) ; **armement en deux temps** du ON sur matériel
+réel (1ᵉʳ clic = armer, 2ᵉ = allumer ; contourné par Maj) ; configuration éditable par
+**formulaires + JSON avancé** synchronisés ; **assistant convertisseur** (courbe live) ;
+graphe commutable °C/A/V avec curseur de lecture, seuils, repères d'événements et
+**marqueur opérateur** (`Ctrl+M`) ; workers en fond ; aide intégrée (**F1** → manuel,
+référence des commandes, raccourcis).
+
+- **Éditeur de séquence** — coloration, auto-complétion, palette cliquable et **lint
+  en direct** (vérification à la frappe, ligne fautive soulignée, statut ✓/✗).
+- **Relecture et comparaison d'essais** (menu *Fichier*) — rouvre un dossier d'essai
+  enregistré et **rejoue ses courbes** (`replay.py`, réutilisant le curseur du graphe),
+  avec régénération du rapport PDF ; ou **superpose deux essais** recalés.
+- **Assistant de configuration** (`config_wizard.py`) — proposé **au tout premier
+  lancement** (une seule fois) et disponible dans le menu *Fichier* : simulation, scan
+  VISA ou saisie d'adresse manuelle.
 
 ## 12. Empaquetage et données utilisateur
 
