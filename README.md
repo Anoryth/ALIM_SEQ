@@ -30,6 +30,13 @@ d'essai. L'**IHM Qt** (PySide6) est l'unique interface.
 
 ## Aperçu
 
+<p align="center"><img src="docs/img/demo.gif" alt="Démonstration : montée en température puis déclenchement de sécurité" width="840"></p>
+
+> **Sécurité en action** *(simulation)* — la carte chauffe sous puissance, la
+> surveillance franchit le seuil d'**alerte**, puis au **critique** la
+> **désalimentation de sécurité** se déclenche (bannière rouge) et la température
+> retombe. Aucun matériel requis.
+
 <p align="center"><img src="docs/img/01-controle.png" alt="Onglet Contrôle" width="840"></p>
 
 > Onglet **Contrôle** — voies d'alimentation et groupe série, surveillance de
