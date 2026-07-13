@@ -1,0 +1,21 @@
+# ------------------------------------------------------------
+#  Balayage de polarisation
+#  Rampe la tension de grille ; le courant de drain suit
+#  (Id = gm·(Vgate − vth)). Attend qu'un seuil de courant soit
+#  franchi, puis coupe. Illustre RAMP et WAIT_CURRENT.
+# ------------------------------------------------------------
+
+SET VDRAIN 12 2
+ON VDRAIN
+ON VGATE
+
+# Rampe VGATE de 0 à 6 V en 6 s, en 30 paliers.
+LOG Rampe de la grille 0 -> 6 V
+RAMP VGATE 0 6 6 30
+
+WAIT_CURRENT VDRAIN >= 1.0 timeout=10
+LOG Courant de drain cible atteint
+
+WAIT 2
+ALL_OFF
+LOG Termine

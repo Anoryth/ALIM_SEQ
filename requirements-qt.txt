@@ -1,0 +1,10 @@
+# Dépendances de l'IHM — REQUISES pour lancer l'application. L'IHM Qt (PySide6) est
+# l'unique interface, y compris en mode simulation.
+#
+#   pip install -r requirements-qt.txt
+#   python3 main.py
+
+PySide6>=6.6      # binding Qt officiel (LGPL) — IHM
+matplotlib>=3.5   # graphiques des rapports d'essai (backend Agg, tracé depuis le CSV)
+reportlab>=4.0    # génération PDF des rapports (pur Python, sans Qt)
+# Les graphes temps réel de l'IHM sont dessinés au QPainter (aucune dépendance).

@@ -1,0 +1,48 @@
+# ============================================================
+#  Séquence de démonstration — ALIM_SEQ
+#  Met sous tension une carte, polarise un transistor par
+#  ASSERVISSEMENT du courant de drain, observe la montée en
+#  température (sécurité thermique active), puis coupe proprement.
+#  Tout tourne en SIMULATION (config par défaut).
+#
+#  Une action par ligne. '#' = commentaire. Éditez librement.
+# ============================================================
+
+LOG Demarrage : mise sous tension des rails
+
+# --- Connexion de la charge (relais) ------------------------
+RELAY K_CHARGE ON
+WAIT 0.3
+
+# --- Rails d'alimentation -----------------------------------
+SET VCC 3.3 1.0
+ON VCC
+WAIT 0.5
+SET VAUX 5.0 0.5
+ON VAUX
+WAIT 0.5
+
+# --- Étage de puissance : on établit la tension de drain ----
+SET VDRAIN 12.0 2.0
+ON VDRAIN
+WAIT 0.5
+
+# --- Polarisation : la grille pilote le courant de drain ----
+# On asservit VGATE pour obtenir 0.8 A sur VDRAIN (pas adaptatif,
+# type sécante/Newton : grand pas loin de la cible, fin tout près).
+ON VGATE
+LOG Asservissement du courant de drain a 0.8 A
+SERVO_ADAPT VGATE VDRAIN 0.8 step=0.5 max=8 tol=0.01
+
+# --- Palier de fonctionnement -------------------------------
+# La carte chauffe : la surveillance thermique veille (T_CARTE).
+LOG Palier de fonctionnement (surveillance thermique active)
+WAIT_TEMP T_CARTE > 45 timeout=25
+LOG Regime thermique etabli
+
+WAIT 3
+
+# --- Coupure ordonnée ---------------------------------------
+LOG Fin d'essai : coupure de toutes les voies
+ALL_OFF
+LOG Sequence terminee

@@ -1,0 +1,62 @@
+{
+  "simulate": true,
+
+  "supplies": {
+    "PSU": { "model": "HMP4040", "resource": "TCPIP0::192.168.0.11::5025::SOCKET" }
+  },
+
+  "instruments": {
+    "RELAIS": { "driver": "MOCK-RELAY", "outputs": { "K_CHARGE": { "safe_state": false } } }
+  },
+
+  "channels": {
+    "VCC":    { "supply": "PSU", "channel": 1, "default_voltage": 3.3, "default_current": 1.0, "max_voltage": 32.0, "max_current": 10.0 },
+    "VAUX":   { "supply": "PSU", "channel": 2, "default_voltage": 5.0, "default_current": 0.5, "max_voltage": 32.0, "max_current": 10.0 },
+    "VGATE":  { "supply": "PSU", "channel": 3, "default_voltage": 0.0, "default_current": 0.02, "max_voltage": 10.0, "max_current": 0.02 },
+    "VDRAIN": { "supply": "PSU", "channel": 4, "default_voltage": 12.0, "default_current": 2.0, "max_voltage": 32.0, "max_current": 10.0 }
+  },
+
+  "groups": {
+    "VBUS": { "members": ["VCC", "VAUX"], "mode": "series", "split": "equal" }
+  },
+
+  "temperatures": {
+    "T_CARTE": {
+      "channel": "ai0",
+      "converter": { "type": "identity" },
+      "warning": 55.0,
+      "critical": 75.0,
+      "requires": ["VDRAIN"]
+    }
+  },
+
+  "daq": { "device": "Dev1", "sample_rate": 2.0 },
+
+  "safety": {
+    "poll_interval": 0.5,
+    "temp_poll_interval": 0.2,
+    "auto_shutdown_on_critical": true,
+    "shutdown_delay": 0.3,
+    "hard_margin_c": 15.0,
+    "shutdown_sequence": "sequences/arret.seq",
+    "comm_fail_limit": 3,
+    "shutdown_on_sensor_fault": false,
+    "shutdown_on_temp_lost": true,
+    "shutdown_on_hw_fault": false
+  },
+
+  "simulation": {
+    "ambient_c": 25.0,
+    "thermal_gain_c_per_w": 2.4,
+    "thermal_tau_s": 10.0,
+    "noise_c": 0.2,
+    "loads": { "VCC": 5.0, "VAUX": 10.0, "VGATE": 1000000.0, "VDRAIN": 1000000.0 },
+    "couplings": [
+      { "gate": "VGATE", "drains": ["VDRAIN"], "vth": 2.0, "gm": 0.5, "imax": 2.0 }
+    ]
+  },
+
+  "visa_backend": "",
+  "visa_query_delay": 0.0,
+  "cc_status": true
+}

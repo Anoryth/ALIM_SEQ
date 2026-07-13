@@ -1,0 +1,44 @@
+name: Build Windows installer
+
+# Construit l'.exe (PyInstaller) + l'installateur (Inno Setup) sur un vrai
+# runner Windows, et publie les artefacts. Déclenché manuellement ou sur tag.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyvisa pyvisa-py pyinstaller
+
+      - name: Build EXE (PyInstaller)
+        run: pyinstaller --noconfirm --clean packaging/ALIM_SEQ.spec
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer (Inno Setup)
+        run: iscc packaging\ALIM_SEQ.iss
+
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: ALIM_SEQ-portable
+          path: dist/ALIM_SEQ.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ALIM_SEQ-Setup
+          path: packaging/Output/ALIM_SEQ-Setup.exe

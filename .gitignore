@@ -1,0 +1,39 @@
+# Artefacts Python
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+build_env/
+*.egg-info/
+
+# Doc API générée par pdoc (tools/build-apidoc.sh) — régénérable
+docs/api/
+
+# Journaux et mesures
+logs/
+*.log
+
+# Livrables / build Windows (volumineux, régénérables)
+windows-build/
+*.exe
+
+# Divers
+.venv/
+
+# Installateurs récupérés par tools/lab-build.sh
+dist-lab/
+
+# Config locale de la CI (hôte SSH du build-box) — jamais versionnée
+tools/lab.env
+
+# Guidage Claude Code (local, non distribué)
+CLAUDE.md
+
+# Manuel : formats régénérables depuis le .md (voir tools/build-manual.sh).
+# Seul le .md est versionné ; .docx/.pdf sont produits à la demande / au build.
+docs/MANUEL_UTILISATEUR.docx
+docs/MANUEL_UTILISATEUR.pdf
+
+# Config locale de Claude Code (non distribuée)
+.claude/

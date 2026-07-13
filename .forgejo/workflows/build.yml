@@ -1,0 +1,91 @@
+# Forgejo Actions — build the ALIM_SEQ portable exe and installer on the
+# self-hosted Windows build box (label "windows", host execution).
+# Place at: .forgejo/workflows/build.yml   (adapted from .github/workflows/windows-build.yml)
+#
+# Prereqs on the build box (provisioned by oem/install.bat):
+#   Python 3.12, Git, Node, Inno Setup 6.
+#
+# Pas de signature de code : les binaires sont livrés non signés.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows            # matches the runner label
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version dérivée du tag git (ex: v1.2.3 -> 1.2.3). Écrite dans
+      # alim_seq/_version.py (lu par __init__.py -> titre/À propos de l'appli).
+      - name: Déterminer la version (tag git)
+        shell: cmd
+        run: |
+          set "VER=${{ github.ref_name }}"
+          if "%VER:~0,1%"=="v" (set "VER=%VER:~1%") else (set "VER=0.0.0-dev")
+          echo Version : %VER%
+          > alim_seq\_version.py echo __version__ = "%VER%"
+
+      - name: Install Python deps
+        shell: cmd
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-qt.txt pyinstaller
+
+      - name: Build portable EXE (PyInstaller, onedir)
+        shell: cmd
+        run: pyinstaller --noconfirm --clean packaging\ALIM_SEQ.spec
+
+      # Rapport de tailles du build (dégraissage — voir packaging/OPTIMISATION.md).
+      - name: Rapport de tailles du build
+        shell: cmd
+        run: python packaging\taille_dist.py dist\ALIM_SEQ
+
+      # Canari : l'exe empaqueté doit DÉMARRER (en simulation) sans planter — c'est
+      # le garde-fou contre une exclusion trop agressive qui casse le lancement.
+      # Non bloquant : on lit le verdict CANARI=... dans le log.
+      - name: Canari de démarrage
+        shell: cmd
+        run: |
+          start "" dist\ALIM_SEQ\ALIM_SEQ.exe
+          ping -n 13 127.0.0.1 >nul
+          tasklist /fi "imagename eq ALIM_SEQ.exe" | find /i "ALIM_SEQ.exe" >nul && (echo CANARI=OK l'exe tourne) || (echo CANARI=ECHEC l'exe ne tourne pas)
+          taskkill /f /im ALIM_SEQ.exe >nul 2>&1
+          exit /b 0
+
+      - name: Build installer (Inno Setup)
+        shell: cmd
+        run: |
+          set "VER=${{ github.ref_name }}"
+          if "%VER:~0,1%"=="v" (set "VER=%VER:~1%") else (set "VER=0.0.0-dev")
+          echo Version installateur : %VER%
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=%VER% packaging\ALIM_SEQ.iss
+
+      # Depose les binaires dans le dossier partage dockur (\\host.lan\Data =
+      # ~/winvm/shared cote hote, et raccourci "Data" sur le bureau Windows) afin
+      # de pouvoir tester l'installateur directement DANS la VM (viewer 8006 / RDP).
+      # Etape non bloquante : une copie ratee ne fait pas echouer le build.
+      # Zippe le dossier onedir en un livrable portable unique (tar est présent
+      # sur Windows 10+ et écrit un vrai zip via -a).
+      - name: Zipper le portable
+        shell: cmd
+        run: tar -a -c -f dist\ALIM_SEQ-portable.zip -C dist ALIM_SEQ
+
+      - name: Copier les binaires dans le dossier partagé de la VM
+        shell: cmd
+        run: |
+          copy /Y packaging\Output\ALIM_SEQ-Setup.exe "\\host.lan\Data\" || echo copie installateur ignoree
+          copy /Y dist\ALIM_SEQ-portable.zip "\\host.lan\Data\" || echo copie portable ignoree
+
+      - name: Upload portable (dossier onedir)
+        uses: forgejo/upload-artifact@v4
+        with:
+          name: ALIM_SEQ-portable
+          path: dist/ALIM_SEQ-portable.zip
+
+      - name: Upload installer
+        uses: forgejo/upload-artifact@v4
+        with:
+          name: ALIM_SEQ-Setup
+          path: packaging/Output/ALIM_SEQ-Setup.exe

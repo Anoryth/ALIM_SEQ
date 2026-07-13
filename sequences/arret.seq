@@ -1,0 +1,21 @@
+# ------------------------------------------------------------
+#  Séquence de COUPURE ordonnée (désalimentation)
+#  Référencée par `safety.shutdown_sequence` dans config.json :
+#  utilisée par le bouton « Séquentiel d'arrêt » ET par la
+#  sécurité thermique (extinction douce plutôt que coupure brutale).
+#
+#  Ordre : on retire d'abord la polarisation et l'étage de
+#  puissance, puis les rails — pour ne jamais laisser le drain
+#  alimenté sans contrôle de grille.
+# ------------------------------------------------------------
+
+LOG Coupure ordonnee en cours
+OFF VGATE
+WAIT 0.3
+OFF VDRAIN
+WAIT 0.3
+OFF VAUX
+WAIT 0.2
+OFF VCC
+RELAY K_CHARGE OFF
+LOG Carte desalimentee
