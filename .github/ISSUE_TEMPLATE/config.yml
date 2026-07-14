@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Question / discussion
     url: https://github.com/Anoryth/ALIM_SEQ/discussions
-    about: Pour une question d'usage ou une discussion, préférez les Discussions.
-  - name: Faille de sécurité
+    about: For a usage question or a discussion, prefer the Discussions.
+  - name: Security vulnerability
     url: https://github.com/Anoryth/ALIM_SEQ/security/advisories/new
-    about: Signalez une vulnérabilité en privé (ne pas ouvrir d'issue publique).
+    about: Report a vulnerability privately (do not open a public issue).

@@ -1,27 +1,27 @@
 ---
-name: Rapport de bug
-about: Signaler un dysfonctionnement
+name: Bug report
+about: Report a malfunction
 title: "[Bug] "
 labels: bug
 ---
 
 ## Description
-Décrire clairement le problème.
+Clearly describe the problem.
 
 ## Reproduction
-Étapes pour reproduire :
+Steps to reproduce:
 1. …
 2. …
 
-**Attendu** : …
-**Observé** : …
+**Expected**: …
+**Observed**: …
 
-## Contexte
-- Version d'ALIM_SEQ : (À propos, ou `alim_seq/_version.py`)
-- Mode : simulation / matériel réel
-- Si matériel réel : modèle(s) d'alimentation, liaison (USB-TMC / LAN VXI-11 / socket)
-- OS : Windows / Linux (version)
+## Context
+- ALIM_SEQ version: (About, or `alim_seq/_version.py`)
+- Mode: simulation / real hardware
+- If real hardware: supply model(s), link (USB-TMC / LAN VXI-11 / socket)
+- OS: Windows / Linux (version)
 
-## Journal / rapport
-Joindre les lignes de journal pertinentes (ou le dossier `logs/essais/…`).
-Pour un bug de **sécurité** (faille), voir plutôt [SECURITY.md](../../SECURITY.md).
+## Log / report
+Attach the relevant log lines (or the `logs/essais/…` folder).
+For a **security** bug (vulnerability), see [SECURITY.md](../../SECURITY.md) instead.

@@ -21,61 +21,77 @@ from .converter import ConverterAssistant
 class ConfigMixin:
     """Onglet Configuration, greffé sur :class:`AlimSeqQtGUI`."""
 
-    # Descriptions de colonnes : (clé JSON, libellé affiché, tooltip). L'ordre fait
-    # foi pour la correspondance colonne <-> clé (plus aucune clé brute affichée).
-    _SUP_COLS = [
-        ("name", "Nom", "Nom logique de l'alimentation (clé JSON : supplies.<nom>)."),
-        ("model", "Modèle", "Modèle R&S HMP (clé JSON : model)."),
-        ("resource", "Adresse VISA",
-         "Ressource VISA, ex. TCPIP0::192.168.0.10::5025::SOCKET (clé JSON : resource)."),
-    ]
-    _CH_COLS = [
-        ("label", "Libellé", "Nom de la voie, utilisé partout dans l'app (clé JSON : channels.<label>)."),
-        ("supply", "Alimentation", "Alimentation qui porte la voie (clé JSON : supply)."),
-        ("channel", "Canal", "Canal physique 1..N de l'alimentation (clé JSON : channel)."),
-        ("negative", "Rail négatif",
-         "Voie câblée en inverse pour produire une tension négative (clé JSON : negative)."),
-        ("default_voltage", "V initiale (V)", "Tension de consigne au démarrage (clé JSON : default_voltage)."),
-        ("default_current", "I initiale (A)", "Limite de courant au démarrage (clé JSON : default_current)."),
-        ("max_voltage", "V max (V)", "Tension maximale autorisée pour la voie (clé JSON : max_voltage)."),
-        ("max_current", "I max (A)", "Courant maximal autorisé pour la voie (clé JSON : max_current)."),
-    ]
-    _GP_COLS = [
-        ("nom", "Nom", "Nom du groupe série, pilotable comme une voie (clé JSON : groups.<nom>)."),
-        ("members", "Voies membres", "Voies en série, séparées par des virgules (clé JSON : members)."),
-        ("split", "Répartition",
-         "Répartition de la tension : équilibrée (equal) ou remplissage (fill). Clé JSON : split."),
-        ("max_voltage", "V max (V) — 0 = auto",
-         "Tension max du groupe ; 0 = somme des membres (clé JSON : max_voltage)."),
-        ("max_current", "I max (A) — 0 = auto",
-         "Courant max du groupe ; 0 = plus petit des membres (clé JSON : max_current)."),
-    ]
-    _TP_COLS = [
-        ("nom", "Nom", "Nom du capteur (clé JSON : temperatures.<nom>)."),
-        ("channel", "Voie NI", "Entrée analogique NI, ex. ai0 (clé JSON : channel)."),
-        ("warning", "Seuil alerte (°C)", "Température d'alerte (clé JSON : warning)."),
-        ("critical", "Seuil critique (°C)",
-         "Température critique déclenchant la désalimentation (clé JSON : critical)."),
-        ("requires", "Voies requises",
-         "Capteur pris en compte seulement si ces voies sont ON (clé JSON : requires)."),
-        ("valid_min", "T plausible min (°C)", "En dessous : capteur en DÉFAUT (clé JSON : valid_min)."),
-        ("valid_max", "T plausible max (°C)", "Au-dessus : capteur en DÉFAUT (clé JSON : valid_max)."),
-        ("converter", "Convertisseur",
-         "Conversion tension→°C ; double-cliquer ouvre l'assistant (clé JSON : converter)."),
-        ("ref_channel", "Voie de référence", "Voie fournissant la tension du pont (clé JSON : ref_channel)."),
-        ("ref_voltage", "V réf. attendue (V)", "Tension de référence attendue (clé JSON : ref_voltage)."),
-        ("ref_tol", "Tolérance réf.", "Écart relatif toléré sur la référence (clé JSON : ref_tol)."),
-        ("ai_min", "Entrée NI min (V)", "Borne basse de la plage d'entrée NI (clé JSON : ai_min)."),
-        ("ai_max", "Entrée NI max (V)", "Borne haute de la plage d'entrée NI (clé JSON : ai_max)."),
-    ]
-    _RL_COLS = [
-        ("name", "Instrument", "Nom de l'instrument relais (clé JSON : instruments.<nom>)."),
-        ("driver", "Driver", "Pilote du relais (seul MOCK-RELAY existe pour l'instant)."),
-        ("outputs", "Sorties", "Labels des sorties, séparés par des virgules (ex. K1, K2)."),
-        ("safe_on", "Fermées à l'arrêt",
-         "Sorties laissées FERMÉES à l'état de sécurité (les autres sont ouvertes), "
-         "séparées par des virgules. Vide = toutes ouvertes."),
-    ]
+    # Column descriptions: (JSON key, displayed label, tooltip). Order is
+    # authoritative for the column <-> key mapping (no raw key is ever shown).
+    # These are methods (not class attributes) so labels/tooltips translate at
+    # build time, once the language is known.
+    def _sup_cols(self):
+        tr = self.tr
+        return [
+            ("name", tr("Name"), tr("Logical name of the supply (JSON key: supplies.<name>).")),
+            ("model", tr("Model"), tr("R&S HMP model (JSON key: model).")),
+            ("resource", tr("VISA address"),
+             tr("VISA resource, e.g. TCPIP0::192.168.0.10::5025::SOCKET (JSON key: resource).")),
+        ]
+
+    def _ch_cols(self):
+        tr = self.tr
+        return [
+            ("label", tr("Label"), tr("Channel name, used everywhere in the app (JSON key: channels.<label>).")),
+            ("supply", tr("Supply"), tr("Supply that carries the channel (JSON key: supply).")),
+            ("channel", tr("Channel"), tr("Physical channel 1..N of the supply (JSON key: channel).")),
+            ("negative", tr("Negative rail"),
+             tr("Channel wired in reverse to produce a negative voltage (JSON key: negative).")),
+            ("default_voltage", tr("Initial V (V)"), tr("Setpoint voltage at startup (JSON key: default_voltage).")),
+            ("default_current", tr("Initial I (A)"), tr("Current limit at startup (JSON key: default_current).")),
+            ("max_voltage", tr("V max (V)"), tr("Maximum voltage allowed for the channel (JSON key: max_voltage).")),
+            ("max_current", tr("I max (A)"), tr("Maximum current allowed for the channel (JSON key: max_current).")),
+        ]
+
+    def _gp_cols(self):
+        tr = self.tr
+        return [
+            ("nom", tr("Name"), tr("Name of the series group, driveable like a channel (JSON key: groups.<name>).")),
+            ("members", tr("Member channels"), tr("Channels in series, comma-separated (JSON key: members).")),
+            ("split", tr("Split"),
+             tr("Voltage split: balanced (equal) or fill (fill). JSON key: split.")),
+            ("max_voltage", tr("V max (V) — 0 = auto"),
+             tr("Group max voltage; 0 = sum of members (JSON key: max_voltage).")),
+            ("max_current", tr("I max (A) — 0 = auto"),
+             tr("Group max current; 0 = smallest of the members (JSON key: max_current).")),
+        ]
+
+    def _tp_cols(self):
+        tr = self.tr
+        return [
+            ("nom", tr("Name"), tr("Sensor name (JSON key: temperatures.<name>).")),
+            ("channel", tr("NI channel"), tr("NI analog input, e.g. ai0 (JSON key: channel).")),
+            ("warning", tr("Warning threshold (°C)"), tr("Warning temperature (JSON key: warning).")),
+            ("critical", tr("Critical threshold (°C)"),
+             tr("Critical temperature triggering the power-down (JSON key: critical).")),
+            ("requires", tr("Required channels"),
+             tr("Sensor considered only if these channels are ON (JSON key: requires).")),
+            ("valid_min", tr("Plausible T min (°C)"), tr("Below: sensor in FAULT (JSON key: valid_min).")),
+            ("valid_max", tr("Plausible T max (°C)"), tr("Above: sensor in FAULT (JSON key: valid_max).")),
+            ("converter", tr("Converter"),
+             tr("Voltage→°C conversion; double-click opens the assistant (JSON key: converter).")),
+            ("ref_channel", tr("Reference channel"), tr("Channel providing the bridge voltage (JSON key: ref_channel).")),
+            ("ref_voltage", tr("Expected ref V (V)"), tr("Expected reference voltage (JSON key: ref_voltage).")),
+            ("ref_tol", tr("Ref. tolerance"), tr("Tolerated relative deviation on the reference (JSON key: ref_tol).")),
+            ("ai_min", tr("NI input min (V)"), tr("Lower bound of the NI input range (JSON key: ai_min).")),
+            ("ai_max", tr("NI input max (V)"), tr("Upper bound of the NI input range (JSON key: ai_max).")),
+        ]
+
+    def _rl_cols(self):
+        tr = self.tr
+        return [
+            ("name", tr("Instrument"), tr("Relay instrument name (JSON key: instruments.<name>).")),
+            ("driver", tr("Driver"), tr("Relay driver (only MOCK-RELAY exists for now).")),
+            ("outputs", tr("Outputs"), tr("Output labels, comma-separated (e.g. K1, K2).")),
+            ("safe_on", tr("Closed at shutdown"),
+             tr("Outputs left CLOSED in the safe state (the others are open), "
+                "comma-separated. Empty = all open.")),
+        ]
 
     @staticmethod
     def _make_table(cols):
@@ -98,9 +114,9 @@ class ConfigMixin:
     def _build_config_tab(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(w)
-        self.cfg_header_label = QtWidgets.QLabel(
-            "Édition interactive de la configuration. Les voies/groupes/capteurs "
-            "renommés ou supprimés sont vérifiés à « Appliquer ».")
+        self.cfg_header_label = QtWidgets.QLabel(self.tr(
+            "Interactive configuration editing. Renamed or deleted "
+            "channels/groups/sensors are checked on “Apply”."))
         v.addWidget(self.cfg_header_label)
 
         sub = QtWidgets.QTabWidget()
@@ -108,96 +124,96 @@ class ConfigMixin:
 
         # --- Sous-onglet Alimentations ---
         sup_page = QtWidgets.QWidget(); sv = QtWidgets.QVBoxLayout(sup_page)
-        sv.addWidget(QtWidgets.QLabel("Adresse VISA de chaque alimentation. "
-                                      "« Scanner VISA » détecte les instruments branchés."))
-        self.sup_table, self.sup_cols = self._make_table(self._SUP_COLS)
+        sv.addWidget(QtWidgets.QLabel(self.tr("VISA address of each supply. "
+                                      "“Scan VISA” detects the connected instruments.")))
+        self.sup_table, self.sup_cols = self._make_table(self._sup_cols())
         sv.addWidget(self.sup_table)
         sb = QtWidgets.QHBoxLayout()
-        for txt, fn in [("+ Ajouter", lambda: self._add_supply()),
-                        ("− Supprimer", self._del_supply)]:
+        for txt, fn in [(self.tr("+ Add"), lambda: self._add_supply()),
+                        (self.tr("− Remove"), self._del_supply)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); sb.addWidget(b)
-        self._btn_scan = QtWidgets.QPushButton("Scanner VISA…")
+        self._btn_scan = QtWidgets.QPushButton(self.tr("Scan VISA…"))
         self._btn_scan.clicked.connect(self._scan)
         sb.addWidget(self._btn_scan)
-        self._btn_test = QtWidgets.QPushButton("Tester la connexion…")
+        self._btn_test = QtWidgets.QPushButton(self.tr("Test the connection…"))
         self._btn_test.clicked.connect(self._test_connection)
         sb.addWidget(self._btn_test)
         sb.addStretch(1)
         sv.addLayout(sb)
-        sub.addTab(sup_page, "Alimentations")
+        sub.addTab(sup_page, self.tr("Supplies"))
 
         # --- Sous-onglet Voies ---
         ch_page = QtWidgets.QWidget(); cv = QtWidgets.QVBoxLayout(ch_page)
-        cv.addWidget(QtWidgets.QLabel("Une voie = un canal physique d'une alim. "
-                                      "« négative » pour un rail câblé en inverse."))
-        self.ch_table, self.ch_cols = self._make_table(self._CH_COLS)
+        cv.addWidget(QtWidgets.QLabel(self.tr("A channel = one physical channel of a supply. "
+                                      "“negative” for a rail wired in reverse.")))
+        self.ch_table, self.ch_cols = self._make_table(self._ch_cols())
         cv.addWidget(self.ch_table)
         cb = QtWidgets.QHBoxLayout()
-        for txt, fn in [("+ Ajouter", lambda: self._add_channel()),
-                        ("− Supprimer", self._del_channel)]:
+        for txt, fn in [(self.tr("+ Add"), lambda: self._add_channel()),
+                        (self.tr("− Remove"), self._del_channel)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); cb.addWidget(b)
         cb.addStretch(1)
         cv.addLayout(cb)
-        sub.addTab(ch_page, "Voies")
+        sub.addTab(ch_page, self.tr("Channels"))
 
         # --- Sous-onglet Groupes (voies en série) ---
         gp_page = QtWidgets.QWidget(); gv = QtWidgets.QVBoxLayout(gp_page)
-        gv.addWidget(QtWidgets.QLabel(
-            "Groupe = voies en SÉRIE (tension additionnée, courant commun), piloté "
-            "par son nom. Membres = voies séparées par des virgules. max=0 → auto."))
-        self.gp_table, self.gp_cols = self._make_table(self._GP_COLS)
+        gv.addWidget(QtWidgets.QLabel(self.tr(
+            "Group = channels in SERIES (summed voltage, common current), driven "
+            "by its name. Members = comma-separated channels. max=0 → auto.")))
+        self.gp_table, self.gp_cols = self._make_table(self._gp_cols())
         gv.addWidget(self.gp_table)
         gb = QtWidgets.QHBoxLayout()
-        for txt, fn in [("+ Ajouter", lambda: self._add_group()),
-                        ("− Supprimer", self._del_group)]:
+        for txt, fn in [(self.tr("+ Add"), lambda: self._add_group()),
+                        (self.tr("− Remove"), self._del_group)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); gb.addWidget(b)
         gb.addStretch(1)
         gv.addLayout(gb)
-        sub.addTab(gp_page, "Groupes")
+        sub.addTab(gp_page, self.tr("Groups"))
 
         # --- Sous-onglet Températures ---
         tp_page = QtWidgets.QWidget(); tv = QtWidgets.QVBoxLayout(tp_page)
-        tv.addWidget(QtWidgets.QLabel(
-            "Un capteur = une voie NI (ai…). « Convertisseur… » ouvre l'assistant "
-            "(type + réglages) et l'applique directement, sans copier-coller."))
-        self.tp_table, self.tp_cols = self._make_table(self._TP_COLS)
+        tv.addWidget(QtWidgets.QLabel(self.tr(
+            "A sensor = one NI channel (ai…). “Converter…” opens the assistant "
+            "(type + settings) and applies it directly, no copy-paste.")))
+        self.tp_table, self.tp_cols = self._make_table(self._tp_cols())
         self.tp_table.cellDoubleClicked.connect(self._on_temp_dblclick)
         tv.addWidget(self.tp_table)
         tb = QtWidgets.QHBoxLayout()
-        for txt, fn in [("+ Ajouter", lambda: self._add_temp()),
-                        ("− Supprimer", self._del_temp),
-                        ("Convertisseur…", self._edit_converter)]:
+        for txt, fn in [(self.tr("+ Add"), lambda: self._add_temp()),
+                        (self.tr("− Remove"), self._del_temp),
+                        (self.tr("Converter…"), self._edit_converter)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); tb.addWidget(b)
         tb.addStretch(1)
         tv.addLayout(tb)
-        sub.addTab(tp_page, "Températures")
+        sub.addTab(tp_page, self.tr("Temperatures"))
 
         # --- Sous-onglet Relais ---
         rl_page = QtWidgets.QWidget(); rv = QtWidgets.QVBoxLayout(rl_page)
-        rv.addWidget(QtWidgets.QLabel(
-            "Relais / actionneurs : un instrument expose des <b>sorties</b> pilotables "
-            "(séquence : <code>RELAY &lt;sortie&gt; ON|OFF</code>). Chaque sortie est "
-            "ramenée à son état de sécurité à l'arrêt (ouverte par défaut). Aucun "
-            "modèle matériel réel n'est encore intégré (MOCK-RELAY = relais simulé)."))
-        self.rl_table, self.rl_cols = self._make_table(self._RL_COLS)
+        rv.addWidget(QtWidgets.QLabel(self.tr(
+            "Relays / actuators: an instrument exposes driveable <b>outputs</b> "
+            "(sequence: <code>RELAY &lt;output&gt; ON|OFF</code>). Each output is "
+            "brought back to its safe state at shutdown (open by default). No real "
+            "hardware model is integrated yet (MOCK-RELAY = simulated relay).")))
+        self.rl_table, self.rl_cols = self._make_table(self._rl_cols())
         rv.addWidget(self.rl_table)
         rb = QtWidgets.QHBoxLayout()
-        for txt, fn in [("+ Ajouter", lambda: self._add_relay()),
-                        ("− Supprimer", self._del_relay)]:
+        for txt, fn in [(self.tr("+ Add"), lambda: self._add_relay()),
+                        (self.tr("− Remove"), self._del_relay)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); rb.addWidget(b)
         rb.addStretch(1)
         rv.addLayout(rb)
-        sub.addTab(rl_page, "Relais")
+        sub.addTab(rl_page, self.tr("Relays"))
 
         # --- Sous-onglet Avancé (JSON complet) ---
         adv_page = QtWidgets.QWidget(); av = QtWidgets.QVBoxLayout(adv_page)
-        av.addWidget(QtWidgets.QLabel(
-            "<b>Configuration complète (JSON)</b> — édition libre. Synchronisée avec les "
-            "formulaires : l'onglet actif fait foi à l'enregistrement."))
+        av.addWidget(QtWidgets.QLabel(self.tr(
+            "<b>Full configuration (JSON)</b> — free editing. Synced with the "
+            "forms: the active tab is authoritative on save.")))
         self.cfg_json = QtWidgets.QPlainTextEdit()
         self.cfg_json.setFont(QtGui.QFont("Monospace"))
         av.addWidget(self.cfg_json, 1)
-        sub.addTab(adv_page, "Avancé (JSON)")
+        sub.addTab(adv_page, self.tr("Advanced (JSON)"))
 
         self.cfg_sub = sub
         self._cfg_adv_index = sub.indexOf(adv_page)
@@ -207,12 +223,12 @@ class ConfigMixin:
 
         # --- Boutons (partagés) ---
         bb = QtWidgets.QHBoxLayout()
-        for txt, fn in [("Assistant convertisseur…", self._assistant),
-                        ("Recharger le fichier", self._cfg_reload_file),
-                        ("Vérifier", self._cfg_verify),
-                        ("Enregistrer", self._cfg_save)]:
+        for txt, fn in [(self.tr("Converter assistant…"), self._assistant),
+                        (self.tr("Reload the file"), self._cfg_reload_file),
+                        (self.tr("Check"), self._cfg_verify),
+                        (self.tr("Save"), self._cfg_save)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); bb.addWidget(b)
-        self.cfg_apply_btn = QtWidgets.QPushButton("✓ Appliquer (recharge matériel)")
+        self.cfg_apply_btn = QtWidgets.QPushButton(self.tr("✓ Apply (reload hardware)"))
         self.cfg_apply_btn.setStyleSheet(theme.style("button.apply", "font-weight:bold;"))
         self.cfg_apply_btn.clicked.connect(self._cfg_apply)
         bb.addWidget(self.cfg_apply_btn)
@@ -261,18 +277,18 @@ class ConfigMixin:
         return it.text().strip() if it else "?"
 
     def _confirm_delete(self, kind: str, name: str, extra: str = "") -> bool:
-        msg = f"Supprimer {kind} « {name} » ?"
+        msg = self.tr("Delete {} “{}”?").format(kind, name)
         if extra:
             msg += "\n" + extra
         return QtWidgets.QMessageBox.question(
-            self, "Confirmer la suppression", msg) == QtWidgets.QMessageBox.Yes
+            self, self.tr("Confirm deletion"), msg) == QtWidgets.QMessageBox.Yes
 
     def _del_supply(self):
         r = self.sup_table.currentRow()
         if r < 0:
             return
-        if not self._confirm_delete("l'alimentation", self._cell_text(self.sup_table, r, 0),
-                                    "Les voies qui la référencent devront être réaffectées."):
+        if not self._confirm_delete(self.tr("the supply"), self._cell_text(self.sup_table, r, 0),
+                                    self.tr("Channels referencing it will need to be reassigned.")):
             return
         self.sup_table.removeRow(r)
         self._refresh_channel_supplies()
@@ -299,8 +315,8 @@ class ConfigMixin:
         if r < 0:
             return
         if not self._confirm_delete(
-                "la voie", self._cell_text(self.ch_table, r, 0),
-                "Les références dans groupes/capteurs/séquences devront être corrigées manuellement."):
+                self.tr("the channel"), self._cell_text(self.ch_table, r, 0),
+                self.tr("References in groups/sensors/sequences will need to be fixed manually.")):
             return
         self.ch_table.removeRow(r)
 
@@ -310,8 +326,8 @@ class ConfigMixin:
         self.gp_table.setItem(r, 0, QtWidgets.QTableWidgetItem(name))
         self.gp_table.setItem(r, 1, QtWidgets.QTableWidgetItem(members))
         combo = QtWidgets.QComboBox()
-        combo.addItem("équilibrée", "equal")
-        combo.addItem("remplissage", "fill")
+        combo.addItem(self.tr("balanced"), "equal")
+        combo.addItem(self.tr("fill"), "fill")
         idx = combo.findData(split if split in ("equal", "fill") else "equal")
         combo.setCurrentIndex(max(0, idx))
         self.gp_table.setCellWidget(r, 2, combo)
@@ -322,7 +338,7 @@ class ConfigMixin:
         r = self.gp_table.currentRow()
         if r < 0:
             return
-        if not self._confirm_delete("le groupe", self._cell_text(self.gp_table, r, 0)):
+        if not self._confirm_delete(self.tr("the group"), self._cell_text(self.gp_table, r, 0)):
             return
         self.gp_table.removeRow(r)
 
@@ -353,7 +369,7 @@ class ConfigMixin:
         r = self.rl_table.currentRow()
         if r < 0:
             return
-        if not self._confirm_delete("le relais", self._cell_text(self.rl_table, r, 0)):
+        if not self._confirm_delete(self.tr("the relay"), self._cell_text(self.rl_table, r, 0)):
             return
         self.rl_table.removeRow(r)
 
@@ -442,7 +458,7 @@ class ConfigMixin:
         r = self.tp_table.currentRow()
         if r < 0:
             return
-        if not self._confirm_delete("le capteur", self._cell_text(self.tp_table, r, 0)):
+        if not self._confirm_delete(self.tr("the sensor"), self._cell_text(self.tp_table, r, 0)):
             return
         self.tp_table.removeRow(r)
 
@@ -453,8 +469,8 @@ class ConfigMixin:
     def _edit_converter(self, *_):
         r = self.tp_table.currentRow()
         if r < 0:
-            QtWidgets.QMessageBox.information(self, "Convertisseur",
-                                              "Sélectionner d'abord un capteur dans le tableau.")
+            QtWidgets.QMessageBox.information(self, self.tr("Converter"),
+                                              self.tr("First select a sensor in the table."))
             return
         item = self.tp_table.item(r, 7)
         try:
@@ -469,7 +485,7 @@ class ConfigMixin:
         try:
             conv = dlg.converter_dict()
         except Exception as exc:
-            QtWidgets.QMessageBox.warning(self, "Convertisseur", f"Paramètres invalides : {exc}")
+            QtWidgets.QMessageBox.warning(self, self.tr("Converter"), self.tr("Invalid parameters: {}").format(exc))
             return
         if item is None:
             item = QtWidgets.QTableWidgetItem()
@@ -568,7 +584,7 @@ class ConfigMixin:
         raw = json.loads(Path(self._cfg_path).read_text(encoding="utf-8"))
         self._fill_forms_from_raw(raw)
         self.cfg_json.setPlainText(json.dumps(raw, indent=2, ensure_ascii=False))
-        self.cfg_status.setText(f"Configuration chargée depuis {Path(self._cfg_path).name}.")
+        self.cfg_status.setText(self.tr("Configuration loaded from {}.").format(Path(self._cfg_path).name))
         self.cfg_status.setStyleSheet(theme.style("text.muted"))
 
     def _forms_to_dict(self) -> dict:
@@ -657,7 +673,7 @@ class ConfigMixin:
         raw, msg = self._cfg_validate()
         if raw is None:
             self.cfg_status.setText(msg); self.cfg_status.setStyleSheet(theme.style("text.error"))
-            QtWidgets.QMessageBox.critical(self, "Configuration invalide", msg)
+            QtWidgets.QMessageBox.critical(self, self.tr("Invalid configuration"), msg)
             return False
         Path(path).write_text(json.dumps(raw, indent=2, ensure_ascii=False),
                               encoding="utf-8")
@@ -666,19 +682,19 @@ class ConfigMixin:
     def _cfg_save(self) -> bool:
         if not self._write_config_to(self._cfg_path):
             return False
-        self.cfg_status.setText(f"✓ Enregistré dans {Path(self._cfg_path).name}.")
+        self.cfg_status.setText(self.tr("✓ Saved to {}.").format(Path(self._cfg_path).name))
         self.cfg_status.setStyleSheet(theme.style("text.ok"))
         return True
 
     def _cfg_apply(self) -> None:
         if self.runner.is_running:
-            QtWidgets.QMessageBox.information(self, "Configuration",
-                                              "Arrêter la séquence avant d'appliquer.")
+            QtWidgets.QMessageBox.information(self, self.tr("Configuration"),
+                                              self.tr("Stop the sequence before applying."))
             return
         if not self._cfg_save():
             return
         if QtWidgets.QMessageBox.question(
-                self, "Appliquer", "Le matériel va être coupé puis rechargé.\nContinuer ?"
+                self, self.tr("Apply"), self.tr("The hardware will be switched off then reloaded.\nContinue?")
         ) != QtWidgets.QMessageBox.Yes:
             return
         self._reload_controller()
@@ -688,7 +704,7 @@ class ConfigMixin:
         try:
             new_cfg = load_config(target)
         except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Configuration invalide", str(exc))
+            QtWidgets.QMessageBox.critical(self, self.tr("Invalid configuration"), str(exc))
             return
         try:
             self.runner.force_stop(); self.ctrl.close()
@@ -707,7 +723,7 @@ class ConfigMixin:
         self._rebuild_tabs()
         self.tabs.setCurrentIndex(0)
         self._update_cfg_labels()
-        self.ctrl.log(f"Configuration appliquée : {self._cfg_path}")
+        self.ctrl.log(self.tr("Configuration applied: {}").format(self._cfg_path))
         # Connexion déportée (ne fige pas l'IHM sur un timeout VISA).
         self._connect_async()
 
@@ -717,23 +733,23 @@ class ConfigMixin:
             try:
                 block = json.dumps(dlg.converter_dict(), ensure_ascii=False)
             except Exception as exc:
-                QtWidgets.QMessageBox.warning(self, "Assistant", f"Paramètres invalides : {exc}")
+                QtWidgets.QMessageBox.warning(self, self.tr("Assistant"), self.tr("Invalid parameters: {}").format(exc))
                 return
             QtWidgets.QApplication.clipboard().setText(block)
             QtWidgets.QMessageBox.information(
-                self, "Assistant convertisseur",
-                "Bloc 'converter' copié dans le presse-papier :\n\n" + block +
-                "\n\nÀ coller dans un capteur de la section « températures » (JSON).")
+                self, self.tr("Converter assistant"),
+                self.tr("'converter' block copied to the clipboard:\n\n{}\n\n"
+                        "Paste it into a sensor of the 'temperatures' section (JSON).").format(block))
 
     def _test_connection(self) -> None:
         if self.ctrl.cfg.simulate:
             QtWidgets.QMessageBox.information(
-                self, "Test connexion", "Mode SIMULATION : rien à tester.")
+                self, self.tr("Connection test"), self.tr("SIMULATION mode: nothing to test."))
             return
         r = self.sup_table.currentRow()
         if r < 0:
-            QtWidgets.QMessageBox.information(self, "Test connexion",
-                                              "Sélectionner une alimentation dans le tableau.")
+            QtWidgets.QMessageBox.information(self, self.tr("Connection test"),
+                                              self.tr("Select a supply in the table."))
             return
         name = self.sup_table.item(r, 0).text().strip()
         combo = self.sup_table.cellWidget(r, 1)
@@ -755,18 +771,18 @@ class ConfigMixin:
         def done(result):
             idn, n = result
             QtWidgets.QMessageBox.information(
-                self, "Test connexion",
-                f"{name} : OK ✓\n\nModèle : {model} ({n} voies)\nIDN : {idn}")
+                self, self.tr("Connection test"),
+                self.tr("{}: OK ✓\n\nModel: {} ({} channels)\nIDN: {}").format(name, model, n, idn))
 
         def failed(msg):
-            QtWidgets.QMessageBox.critical(self, "Test connexion", f"{name} : ÉCHEC\n\n{msg}")
+            QtWidgets.QMessageBox.critical(self, self.tr("Connection test"), self.tr("{}: FAILURE\n\n{}").format(name, msg))
 
         self._start_hw_task(work, done, failed, busy_widgets=(self._btn_test,), cursor=True)
 
     def _scan(self) -> None:
         if self.ctrl.cfg.simulate:
             QtWidgets.QMessageBox.information(
-                self, "Scan VISA", "Indisponible en mode SIMULATION (simulate: true).")
+                self, self.tr("VISA scan"), self.tr("Unavailable in SIMULATION mode (simulate: true)."))
             return
 
         def work():
@@ -774,12 +790,12 @@ class ConfigMixin:
 
         def done(found):
             if not found:
-                QtWidgets.QMessageBox.information(self, "Scan VISA", "Aucun instrument trouvé.")
+                QtWidgets.QMessageBox.information(self, self.tr("VISA scan"), self.tr("No instrument found."))
                 return
-            items = [f"{d['resource']}    [{d['idn'] or 'pas de réponse IDN'}]" for d in found]
+            items = ["{}    [{}]".format(d['resource'], d['idn'] or self.tr('no IDN response')) for d in found]
             choice, ok = QtWidgets.QInputDialog.getItem(
-                self, "Instruments détectés",
-                "Affecter la ressource à la voie sélectionnée :", items, 0, False)
+                self, self.tr("Detected instruments"),
+                self.tr("Assign the resource to the selected channel:"), items, 0, False)
             if ok and choice:
                 res = found[items.index(choice)]["resource"]
                 r = self.sup_table.currentRow()
@@ -789,6 +805,6 @@ class ConfigMixin:
                     self.sup_table.setItem(r, 2, QtWidgets.QTableWidgetItem(res))
 
         def failed(msg):
-            QtWidgets.QMessageBox.critical(self, "Scan VISA", msg)
+            QtWidgets.QMessageBox.critical(self, self.tr("VISA scan"), msg)
 
         self._start_hw_task(work, done, failed, busy_widgets=(self._btn_scan,), cursor=True)

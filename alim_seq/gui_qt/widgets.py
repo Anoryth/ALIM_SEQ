@@ -39,8 +39,15 @@ class NoScrollDoubleSpinBox(QtWidgets.QDoubleSpinBox):
 class ChannelRowQt:
     """Une ligne de pilotage d'une voie, ajoutée à un QGridLayout."""
 
-    HEADERS = ["Voie", "V consigne", "I limite", "", "Sortie",
-               "V mesurée", "I mesurée", "Mode"]
+    @staticmethod
+    def headers():
+        return [QtCore.QCoreApplication.translate("ChannelRowQt", "Channel"),
+                QtCore.QCoreApplication.translate("ChannelRowQt", "V setpoint"),
+                QtCore.QCoreApplication.translate("ChannelRowQt", "I limit"), "",
+                QtCore.QCoreApplication.translate("ChannelRowQt", "Output"),
+                QtCore.QCoreApplication.translate("ChannelRowQt", "V measured"),
+                QtCore.QCoreApplication.translate("ChannelRowQt", "I measured"),
+                QtCore.QCoreApplication.translate("ChannelRowQt", "Mode")]
 
     def __init__(self, grid: QtWidgets.QGridLayout, row: int, label: str, ctrl: Controller):
         self.label = label
@@ -73,12 +80,12 @@ class ChannelRowQt:
         grid.addWidget(self.v_set, row, 1)
         grid.addWidget(self.i_set, row, 2)
 
-        self.apply_btn = QtWidgets.QPushButton("Appliquer")
+        self.apply_btn = QtWidgets.QPushButton(QtCore.QCoreApplication.translate("ChannelRowQt", "Apply"))
         self.apply_btn.setMaximumWidth(110)
         self.apply_btn.clicked.connect(self._apply)
         grid.addWidget(self.apply_btn, row, 3)
 
-        self.btn_out = QtWidgets.QPushButton("OFF")
+        self.btn_out = QtWidgets.QPushButton(QtCore.QCoreApplication.translate("ChannelRowQt", "OFF"))
         self.btn_out.setMaximumWidth(70)
         self.btn_out.clicked.connect(self._toggle)
         grid.addWidget(self.btn_out, row, 4)
@@ -145,7 +152,7 @@ class ChannelRowQt:
         # Matériel réel, 1er clic : on ARME (filet contre le clic malheureux à 32 V).
         self._armed = True
         self._disarm_timer.start()
-        self.btn_out.setText("⚠ Armer ?")
+        self.btn_out.setText(QtCore.QCoreApplication.translate("ChannelRowQt", "⚠ Arm?"))
         self.btn_out.setStyleSheet(theme.style("status.warning", "font-weight:bold;"))
 
     def _disarm(self) -> None:
@@ -170,16 +177,16 @@ class ChannelRowQt:
         self.i_meas.setStyleSheet(muted)
         # Bouton de sortie : « ⚠ Armer ? » a la priorité (armement 2 temps en cours).
         if self._armed and not view.output:
-            self.btn_out.setText("⚠ Armer ?")
+            self.btn_out.setText(QtCore.QCoreApplication.translate("ChannelRowQt", "⚠ Arm?"))
             self.btn_out.setStyleSheet(theme.style("status.warning", "font-weight:bold;"))
         elif view.output:
-            self.btn_out.setText("ON")
+            self.btn_out.setText(QtCore.QCoreApplication.translate("ChannelRowQt", "ON"))
             self.btn_out.setStyleSheet(theme.style("button.on", "font-weight:bold;"))
         else:
-            self.btn_out.setText("OFF")
+            self.btn_out.setText(QtCore.QCoreApplication.translate("ChannelRowQt", "OFF"))
             self.btn_out.setStyleSheet(theme.style("button.off"))
         if stale:
-            self.mode.setText("⏱ figé")
+            self.mode.setText(QtCore.QCoreApplication.translate("ChannelRowQt", "⏱ frozen"))
             self.mode.setStyleSheet(theme.style("text.muted", fg_only=True))
         elif view.faults:
             self.mode.setText("/".join(view.faults))
@@ -220,7 +227,10 @@ class ChannelRowQt:
 class RelayRowQt:
     """Une ligne de pilotage d'une sortie de relais, ajoutée à un QGridLayout."""
 
-    HEADERS = ["Sortie", "État", ""]
+    @staticmethod
+    def headers():
+        return [QtCore.QCoreApplication.translate("RelayRowQt", "Output"),
+                QtCore.QCoreApplication.translate("RelayRowQt", "State"), ""]
 
     def __init__(self, grid: QtWidgets.QGridLayout, row: int, label: str, ctrl: Controller):
         self.label = label
@@ -234,7 +244,7 @@ class RelayRowQt:
         self.state.setMinimumWidth(80)
         grid.addWidget(self.state, row, 1)
 
-        self.btn = QtWidgets.QPushButton("OFF")
+        self.btn = QtWidgets.QPushButton(QtCore.QCoreApplication.translate("RelayRowQt", "OFF"))
         self.btn.setMaximumWidth(90)
         self.btn.clicked.connect(self._toggle)
         grid.addWidget(self.btn, row, 2)
@@ -248,14 +258,14 @@ class RelayRowQt:
 
     def update(self, on: bool, tripped: bool = False, hw_enabled: bool = True) -> None:
         if on:
-            self.state.setText("fermé (ON)")
+            self.state.setText(QtCore.QCoreApplication.translate("RelayRowQt", "closed (ON)"))
             self.state.setStyleSheet(theme.style("text.ok", fg_only=True))
-            self.btn.setText("ON")
+            self.btn.setText(QtCore.QCoreApplication.translate("RelayRowQt", "ON"))
             self.btn.setStyleSheet(theme.style("button.on", "font-weight:bold;"))
         else:
-            self.state.setText("ouvert (OFF)")
+            self.state.setText(QtCore.QCoreApplication.translate("RelayRowQt", "open (OFF)"))
             self.state.setStyleSheet(theme.style("text.muted", fg_only=True))
-            self.btn.setText("OFF")
+            self.btn.setText(QtCore.QCoreApplication.translate("RelayRowQt", "OFF"))
             self.btn.setStyleSheet(theme.style("button.off"))
         # Fermer un relais est refusé tant que la sécurité est armée : feedback immédiat.
         self.btn.setEnabled(hw_enabled and not (tripped and not on))
@@ -278,9 +288,9 @@ class TempRowQt:
 
     def update(self, temp: float, level: str) -> None:
         if level == NA:
-            text = "en attente"
+            text = QtCore.QCoreApplication.translate("TempRowQt", "pending")
         elif level == FAULT:
-            text = "DÉFAUT"
+            text = QtCore.QCoreApplication.translate("TempRowQt", "FAULT")
         elif temp != temp:  # NaN
             text = "-- °C"
         else:

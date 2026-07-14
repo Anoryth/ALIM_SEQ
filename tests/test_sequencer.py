@@ -132,7 +132,7 @@ def test_non_numeric_args_rejected(line):
 def test_ramp_steps_must_be_integer_ge_2(line):
     with pytest.raises(SequenceError) as exc:
         parse(line)
-    assert "pas" in str(exc.value).lower()
+    assert "step" in str(exc.value).lower()
 
 
 def test_ramp_steps_valid_integer_accepted():

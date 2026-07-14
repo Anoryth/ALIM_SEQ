@@ -1,22 +1,22 @@
 ---
-name: Proposition de fonctionnalité
-about: Suggérer une amélioration ou un nouveau driver
-title: "[Idée] "
+name: Feature request
+about: Suggest an improvement or a new driver
+title: "[Idea] "
 labels: enhancement
 ---
 
-## Besoin
-Quel problème d'usage cela résout-il ? (le *pourquoi* avant le *quoi*)
+## Need
+What usage problem does this solve? (the *why* before the *what*)
 
-## Proposition
-Décrire la fonctionnalité envisagée.
+## Proposal
+Describe the envisaged feature.
 
-## Nouveau driver d'appareil ?
-Si c'est le support d'un instrument :
-- appareil (marque / modèle) et capacité (source de tension, mesure, relais…) ;
-- interface (SCPI/VISA, série, USB-HID…) ;
-- documentation disponible.
-Voir le [guide d'intégration de drivers](../../docs/GUIDE_DRIVERS.md).
+## New device driver?
+If it is support for an instrument:
+- device (brand / model) and capability (voltage source, measurement, relay…);
+- interface (SCPI/VISA, serial, USB-HID…);
+- available documentation.
+See the [driver integration guide](../../docs/GUIDE_DRIVERS.md).
 
-## Alternatives / remarques
-Contexte, contraintes, idées écartées.
+## Alternatives / notes
+Context, constraints, discarded ideas.

@@ -30,10 +30,18 @@ tools/lab.env
 # Guidage Claude Code (local, non distribué)
 CLAUDE.md
 
+# Compiled translation catalogs — regenerable via tools/build-i18n.sh.
+# Only the .ts / .po sources are versioned; .qm / .mo are build artifacts.
+alim_seq/gui_qt/i18n/*.qm
+alim_seq/locale/**/*.mo
+alim_seq/locale/*.pot
+
 # Manuel : formats régénérables depuis le .md (voir tools/build-manual.sh).
 # Seul le .md est versionné ; .docx/.pdf sont produits à la demande / au build.
 docs/MANUEL_UTILISATEUR.docx
 docs/MANUEL_UTILISATEUR.pdf
+docs/USER_MANUAL.docx
+docs/USER_MANUAL.pdf
 
 # Config locale de Claude Code (non distribuée)
 .claude/
@@ -41,3 +49,7 @@ docs/MANUEL_UTILISATEUR.pdf
 # Note de conception interne (planification par phases + renvois ROADMAP) —
 # gardée en local mais hors release publique.
 docs/DESIGN_INSTRUMENTS.md
+
+# Note : docs/TOOLCHAIN.md reste TRACKÉ ici (master/lab, détails CI/build-box
+# internes) mais est exclu du push vers public-release/GitHub — géré au niveau
+# de la branche, pas du gitignore.

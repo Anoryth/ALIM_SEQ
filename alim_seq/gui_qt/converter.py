@@ -60,7 +60,7 @@ class DividerSchematic(QtWidgets.QWidget):
                        QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, label)
 
         # Vréf en haut
-        p.drawText(QtCore.QRect(x - 40, top - 4, 80, 16), QtCore.Qt.AlignCenter, "Vréf")
+        p.drawText(QtCore.QRect(x - 40, top - 4, 80, 16), QtCore.Qt.AlignCenter, self.tr("Vref"))
         p.drawLine(x, top + 12, x, y1)
         box(y1, y2, upper, sensor=(upper == self.kind))
         # nœud + dérivation vers l'ADC
@@ -108,7 +108,7 @@ class ConverterAssistant(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Assistant convertisseur de température")
+        self.setWindowTitle(self.tr("Temperature converter assistant"))
         self.resize(780, 580)
         root = QtWidgets.QVBoxLayout(self)
 
@@ -116,7 +116,7 @@ class ConverterAssistant(QtWidgets.QDialog):
         self.type_combo = QtWidgets.QComboBox()
         self.type_combo.addItems(["ntc", "ptc", "thermocouple", "table", "poly", "identity"])
         self.type_combo.currentTextChanged.connect(self._on_type)
-        form.addRow("Type", self.type_combo)
+        form.addRow(self.tr("Type"), self.type_combo)
         root.addLayout(form)
 
         mid = QtWidgets.QHBoxLayout()
@@ -143,7 +143,7 @@ class ConverterAssistant(QtWidgets.QDialog):
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
-        copy = btns.addButton("Copier le JSON", QtWidgets.QDialogButtonBox.ActionRole)
+        copy = btns.addButton(self.tr("Copy the JSON"), QtWidgets.QDialogButtonBox.ActionRole)
         copy.clicked.connect(self._copy)
         root.addWidget(btns)
 
@@ -162,33 +162,33 @@ class ConverterAssistant(QtWidgets.QDialog):
     def _on_type(self, t: str) -> None:
         self._clear_params()
         if t == "table":
-            box = QtWidgets.QGroupBox("Points d'étalonnage (tension → °C)")
+            box = QtWidgets.QGroupBox(self.tr("Calibration points (voltage → °C)"))
             bl = QtWidgets.QVBoxLayout(box)
             self.points_table = QtWidgets.QTableWidget(0, 2)
-            self.points_table.setHorizontalHeaderLabels(["Tension (V)", "°C"])
+            self.points_table.setHorizontalHeaderLabels([self.tr("Voltage (V)"), "°C"])
             self.points_table.horizontalHeader().setStretchLastSection(True)
             self.points_table.cellChanged.connect(lambda *_: self._update())
             bl.addWidget(self.points_table)
             hb = QtWidgets.QHBoxLayout()
-            add = QtWidgets.QPushButton("+ Point"); add.clicked.connect(lambda: self._add_point())
-            rem = QtWidgets.QPushButton("− Point"); rem.clicked.connect(self._del_point)
-            imp = QtWidgets.QPushButton("Importer CSV…"); imp.clicked.connect(self._import_csv)
+            add = QtWidgets.QPushButton(self.tr("+ Point")); add.clicked.connect(lambda: self._add_point())
+            rem = QtWidgets.QPushButton(self.tr("− Point")); rem.clicked.connect(self._del_point)
+            imp = QtWidgets.QPushButton(self.tr("Import CSV…")); imp.clicked.connect(self._import_csv)
             hb.addWidget(add); hb.addWidget(rem); hb.addWidget(imp); hb.addStretch(1)
             bl.addLayout(hb)
             self.params_layout.addWidget(box)
             for v, tc in self._DEFAULT_POINTS:
                 self._add_point(v, tc)
         else:
-            box = QtWidgets.QGroupBox("Paramètres")
+            box = QtWidgets.QGroupBox(self.tr("Parameters"))
             fl = QtWidgets.QFormLayout(box)
             presets = {"ntc": NTC_PRESETS, "ptc": PTC_PRESETS}.get(t)
             if presets:
                 combo = QtWidgets.QComboBox()
-                combo.addItem("— preset —")
+                combo.addItem(self.tr("— preset —"))
                 combo.addItems(list(presets))
                 combo.currentTextChanged.connect(
                     lambda name, p=presets: self._apply_preset(p.get(name)))
-                fl.addRow("Preset", combo)
+                fl.addRow(self.tr("Preset"), combo)
             for key, default in self._FIELDS.get(t, []):
                 e = QtWidgets.QLineEdit(default)
                 e.textChanged.connect(self._update)
@@ -224,13 +224,13 @@ class ConverterAssistant(QtWidgets.QDialog):
 
     def _import_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Importer une table d'étalonnage", "", "CSV (*.csv *.txt);;Tous (*)")
+            self, self.tr("Import a calibration table"), "", self.tr("CSV (*.csv *.txt);;All (*)"))
         if not path:
             return
         try:
             pts = parse_table_csv(Path(path).read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            QtWidgets.QMessageBox.warning(self, "Import CSV", str(exc))
+            QtWidgets.QMessageBox.warning(self, self.tr("CSV import"), str(exc))
             return
         self.points_table.setRowCount(0)
         for v, tc in pts:

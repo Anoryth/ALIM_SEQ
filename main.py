@@ -17,15 +17,17 @@ from pathlib import Path
 
 from alim_seq.config import load_config
 from alim_seq.controller import Controller
+from alim_seq.i18n import _
 
 # Dossier du projet (là où se trouve ce script).
 PROJECT_DIR = Path(__file__).resolve().parent
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Séquenceur d'alimentation HMP4040 / NI")
+    parser = argparse.ArgumentParser(description=_("HMP4040 / NI power-supply sequencer"))
     parser.add_argument(
-        "--config", default="config.json", help="Fichier de configuration (défaut: config.json)"
+        "--config", default="config.json",
+        help=_("Configuration file (default: config.json)")
     )
     args = parser.parse_args()
 
@@ -47,24 +49,24 @@ def main() -> int:
         os.chdir(PROJECT_DIR)
 
     if not cfg_path.exists():
-        print(f"Configuration introuvable : {cfg_path}", file=sys.stderr)
+        print(_("Configuration not found: {}").format(cfg_path), file=sys.stderr)
         return 2
 
     try:
         cfg = load_config(cfg_path)
     except ValueError as exc:
-        print(f"Erreur de configuration :\n{exc}", file=sys.stderr)
+        print(_("Configuration error:\n{}").format(exc), file=sys.stderr)
         return 2
 
     ctrl = Controller(cfg)
-    ctrl.enable_file_logging()  # journal applicatif -> logs/alim_seq.log
+    ctrl.enable_file_logging()  # application log -> logs/alim_seq.log
 
     try:
         from alim_seq.gui_qt import run as run_qt
     except ImportError as exc:
-        print("PySide6 est requis pour l'interface graphique d'ALIM_SEQ.\n"
-              "  Installer les dépendances de l'IHM :  pip install -r requirements-qt.txt\n"
-              f"  (détail : {exc})", file=sys.stderr)
+        print(_("PySide6 is required for the ALIM_SEQ graphical interface.\n"
+                "  Install the GUI dependencies:  pip install -r requirements-qt.txt\n"
+                "  (detail: {})").format(exc), file=sys.stderr)
         return 2
     run_qt(ctrl)
     return 0

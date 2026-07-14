@@ -1,11 +1,11 @@
-# Dépendances pour le mode MATÉRIEL RÉEL (pilotage SCPI / NI) uniquement.
-# L'interface graphique (Qt) requiert PySide6 dans tous les cas — y compris en
-# simulation : voir requirements-qt.txt. Ce fichier n'ajoute que les pilotes.
+# Dependencies for REAL-HARDWARE mode (SCPI / NI control) only.
+# The graphical interface (Qt) requires PySide6 in all cases — including in
+# simulation: see requirements-qt.txt. This file only adds the drivers.
 #
 #   pip install -r requirements.txt
 
-pyvisa>=1.13         # Communication SCPI avec les alimentations R&S HMP4040
-pyvisa-py>=0.7       # Backend VISA pur Python (si NI-VISA non installé)
-psutil>=5.9          # Requis par pyvisa-py (listing des ressources TCPIP)
-pyserial>=3.5        # Backend série pour pyvisa-py (optionnel)
-nidaqmx>=0.9         # Acquisition National Instruments (nécessite le driver NI-DAQmx)
+pyvisa>=1.13         # SCPI communication with the R&S HMP4040 supplies
+pyvisa-py>=0.7       # Pure-Python VISA backend (if NI-VISA is not installed)
+psutil>=5.9          # Required by pyvisa-py (TCPIP resource listing)
+pyserial>=3.5        # Serial backend for pyvisa-py (optional)
+nidaqmx>=0.9         # National Instruments acquisition (requires the NI-DAQmx driver)

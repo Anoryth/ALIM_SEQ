@@ -62,7 +62,7 @@ def gui(qapp, tmp_path):
 def test_gui_construit_tous_les_onglets(gui):
     titres = [gui.tabs.tabText(i) for i in range(gui.tabs.count())]
     joined = " ".join(titres)
-    for attendu in ("Contrôle", "Configuration", "Éditeur", "Graphe", "Simulation"):
+    for attendu in ("Control", "Configuration", "Sequence editor", "Chart", "Simulation"):
         assert attendu in joined, (attendu, titres)
 
 
@@ -222,7 +222,7 @@ def test_graphe_visible_sans_capteur(qapp, tmp_path):
     w = AlimSeqQtGUI(ctrl)
     try:
         titres = " ".join(w.tabs.tabText(i) for i in range(w.tabs.count()))
-        assert "Graphe" in titres
+        assert "Chart" in titres
         assert w.plot is not None and w.plot.mode == "current"  # pas 'temp' (rien à tracer)
         ctrl.set_voltage("CH1", 5.0); ctrl.set_output("CH1", True)
         w._refresh()

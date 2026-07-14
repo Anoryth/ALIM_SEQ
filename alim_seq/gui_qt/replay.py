@@ -129,9 +129,9 @@ def _mode_combo(view) -> QtWidgets.QComboBox:
     """Sélecteur de grandeur commun aux vues de relecture/comparaison."""
     qty = QtWidgets.QComboBox()
     if view.sensors:
-        qty.addItem("Températures (°C)", "temp")
-    qty.addItem("Courants (A)", "current")
-    qty.addItem("Tensions (V)", "voltage")
+        qty.addItem(QtCore.QCoreApplication.translate("replay", "Temperatures (°C)"), "temp")
+    qty.addItem(QtCore.QCoreApplication.translate("replay", "Currents (A)"), "current")
+    qty.addItem(QtCore.QCoreApplication.translate("replay", "Voltages (V)"), "voltage")
     qty.currentIndexChanged.connect(lambda i: view.set_mode(qty.itemData(i)))
     return qty
 
@@ -141,19 +141,19 @@ def _meta_header(meta: dict, dossier: Path) -> str:
     issue = (meta.get("issue") or {}).get("issue", "?")
     parts = [f"<b>{meta.get('nom') or dossier.name}</b>"]
     if meta.get("operateur"):
-        parts.append(f"opérateur {meta['operateur']}")
+        parts.append(QtCore.QCoreApplication.translate("replay", "operator {}").format(meta["operateur"]))
     if meta.get("debut"):
-        parts.append(f"début {meta['debut']}")
+        parts.append(QtCore.QCoreApplication.translate("replay", "start {}").format(meta["debut"]))
     if meta.get("fin"):
-        parts.append(f"fin {meta['fin']}")
-    parts.append(f"mode {meta.get('mode', '?')}")
-    parts.append(f"issue : {issue}")
+        parts.append(QtCore.QCoreApplication.translate("replay", "end {}").format(meta["fin"]))
+    parts.append(QtCore.QCoreApplication.translate("replay", "mode {}").format(meta.get("mode", "?")))
+    parts.append(QtCore.QCoreApplication.translate("replay", "outcome: {}").format(issue))
     return " · ".join(parts)
 
 
 def _events_legend(evs) -> QtWidgets.QWidget:
     """Légende repliable des événements numérotés (n° = repère sur le graphe)."""
-    box = QtWidgets.QGroupBox(f"Événements ({len(evs)})")
+    box = QtWidgets.QGroupBox(QtCore.QCoreApplication.translate("replay", "Events ({})").format(len(evs)))
     box.setCheckable(True)
     box.setChecked(False)
     lay = QtWidgets.QVBoxLayout(box)
@@ -180,7 +180,7 @@ def open_replay_dialog(parent, dossier, on_report=None) -> QtWidgets.QDialog:
         pass
 
     dlg = QtWidgets.QDialog(parent)
-    dlg.setWindowTitle(f"Relecture — {dossier.name}")
+    dlg.setWindowTitle(QtCore.QCoreApplication.translate("replay", "Replay — {}").format(dossier.name))
     dlg.resize(920, 580)
     v = QtWidgets.QVBoxLayout(dlg)
 
@@ -192,14 +192,14 @@ def open_replay_dialog(parent, dossier, on_report=None) -> QtWidgets.QDialog:
     view = EssaiReplayView(dossier)
 
     bar = QtWidgets.QHBoxLayout()
-    bar.addWidget(QtWidgets.QLabel("Grandeur :"))
+    bar.addWidget(QtWidgets.QLabel(QtCore.QCoreApplication.translate("replay", "Quantity:")))
     bar.addWidget(_mode_combo(view))
     bar.addStretch(1)
     png = QtWidgets.QPushButton("📷 PNG")
     png.clicked.connect(lambda: _save_png(dlg, view))
     bar.addWidget(png)
     if on_report is not None:
-        rb = QtWidgets.QPushButton("📄 Générer le rapport PDF")
+        rb = QtWidgets.QPushButton(QtCore.QCoreApplication.translate("replay", "📄 Generate the PDF report"))
         rb.clicked.connect(lambda: on_report(dossier))
         bar.addWidget(rb)
     v.addLayout(bar)
@@ -218,21 +218,21 @@ def open_compare_dialog(parent, dossier_a, dossier_b) -> QtWidgets.QDialog:
     superposées, recalées sur t = 0)."""
     dossier_a, dossier_b = Path(dossier_a), Path(dossier_b)
     dlg = QtWidgets.QDialog(parent)
-    dlg.setWindowTitle(f"Comparaison — {dossier_a.name} vs {dossier_b.name}")
+    dlg.setWindowTitle(QtCore.QCoreApplication.translate("replay", "Comparison — {} vs {}").format(dossier_a.name, dossier_b.name))
     dlg.resize(940, 600)
     v = QtWidgets.QVBoxLayout(dlg)
 
     hdr = QtWidgets.QLabel(
-        f"<b>A</b> = {dossier_a.name} &nbsp;·&nbsp; <b>B</b> = {dossier_b.name}"
-        " &nbsp;—&nbsp; courbes recalées sur t = 0 (une couleur par série ; "
-        "cliquer une entrée de légende pour l'isoler)")
+        QtCore.QCoreApplication.translate("replay", "<b>A</b> = {} &nbsp;·&nbsp; <b>B</b> = {} &nbsp;—&nbsp; "
+             "curves aligned on t = 0 (one color per series; click a legend entry "
+             "to isolate it)").format(dossier_a.name, dossier_b.name))
     hdr.setTextFormat(QtCore.Qt.RichText)
     hdr.setWordWrap(True)
     v.addWidget(hdr)
 
     view = EssaiCompareView(dossier_a, dossier_b)
     bar = QtWidgets.QHBoxLayout()
-    bar.addWidget(QtWidgets.QLabel("Grandeur :"))
+    bar.addWidget(QtWidgets.QLabel(QtCore.QCoreApplication.translate("replay", "Quantity:")))
     bar.addWidget(_mode_combo(view))
     bar.addStretch(1)
     png = QtWidgets.QPushButton("📷 PNG")
@@ -248,7 +248,7 @@ def open_compare_dialog(parent, dossier_a, dossier_b) -> QtWidgets.QDialog:
 
 def _save_png(parent, view) -> None:
     path, _ = QtWidgets.QFileDialog.getSaveFileName(
-        parent, "Exporter le graphe", "relecture.png", "Image PNG (*.png)")
+        parent, QtCore.QCoreApplication.translate("replay", "Export the chart"), "relecture.png", QtCore.QCoreApplication.translate("replay", "PNG image (*.png)"))
     if not path:
         return
     if not path.lower().endswith(".png"):

@@ -25,21 +25,21 @@ class SimMixin:
         v = QtWidgets.QVBoxLayout(inner)
         params = self.ctrl.sim_params()
 
-        intro = QtWidgets.QLabel(
-            "Réglages du <b>mode simulation</b> uniquement, appliqués <b>en direct</b> : "
-            "l'effet est visible immédiatement dans l'onglet <i>Contrôle</i> (courants, "
-            "montée en température). Ils mettent à jour la section <code>simulation</code> "
-            "de la configuration en mémoire.")
+        intro = QtWidgets.QLabel(self.tr(
+            "<b>Simulation mode</b> settings only, applied <b>live</b>: the effect is "
+            "visible immediately in the <i>Control</i> tab (currents, temperature rise). "
+            "They update the <code>simulation</code> section of the in-memory "
+            "configuration."))
         intro.setWordWrap(True)
         intro.setStyleSheet(theme.style("text.muted"))
         v.addWidget(intro)
 
         # --- Charges résistives par voie ---
-        lbox = QtWidgets.QGroupBox("Charges résistives par voie")
+        lbox = QtWidgets.QGroupBox(self.tr("Resistive loads per channel"))
         lg = QtWidgets.QGridLayout(lbox)
-        lg.addWidget(QtWidgets.QLabel("Une charge R fixe la relation I = V/R "
-                                      "(passage en limitation de courant si V/R dépasse "
-                                      "la limite)."), 0, 0, 1, 2)
+        lg.addWidget(QtWidgets.QLabel(self.tr("A load R sets the relation I = V/R "
+                                              "(enters current limiting if V/R exceeds "
+                                              "the limit).")), 0, 0, 1, 2)
         self._sim_load_spins = {}
         for r, (label, ohms) in enumerate(params["loads"].items(), start=1):
             lg.addWidget(QtWidgets.QLabel(label), r, 0)
@@ -54,18 +54,18 @@ class SimMixin:
         v.addWidget(lbox)
 
         # --- Modèle thermique ---
-        tbox = QtWidgets.QGroupBox("Modèle thermique (montée en température simulée)")
+        tbox = QtWidgets.QGroupBox(self.tr("Thermal model (simulated temperature rise)"))
         tg = QtWidgets.QGridLayout(tbox)
         th = params["thermal"]
         specs = [
-            ("ambient_c", "Ambiante", " °C", 2, -50.0, 200.0, 1.0,
-             "Température au repos (puissance nulle)."),
-            ("thermal_gain_c_per_w", "Gain", " °C/W", 3, 0.0, 1000.0, 0.5,
-             "Élévation par watt dissipé : cible = ambiante + gain × puissance."),
-            ("thermal_tau_s", "Constante de temps τ", " s", 2, 0.1, 3600.0, 0.5,
-             "Temps de réponse thermique (réponse du 1er ordre vers la cible)."),
-            ("noise_c", "Bruit de mesure", " °C", 3, 0.0, 50.0, 0.05,
-             "Amplitude du bruit ajouté à chaque lecture."),
+            ("ambient_c", self.tr("Ambient"), " °C", 2, -50.0, 200.0, 1.0,
+             self.tr("Temperature at rest (zero power).")),
+            ("thermal_gain_c_per_w", self.tr("Gain"), " °C/W", 3, 0.0, 1000.0, 0.5,
+             self.tr("Rise per dissipated watt: target = ambient + gain × power.")),
+            ("thermal_tau_s", self.tr("Time constant τ"), " s", 2, 0.1, 3600.0, 0.5,
+             self.tr("Thermal response time (first-order response toward the target).")),
+            ("noise_c", self.tr("Measurement noise"), " °C", 3, 0.0, 50.0, 0.05,
+             self.tr("Amplitude of the noise added on each reading.")),
         ]
         self._sim_thermal_spins = {}
         for r, (key, name, suf, dec, lo, hi, step, tip) in enumerate(specs):
@@ -82,28 +82,28 @@ class SimMixin:
         v.addWidget(tbox)
 
         # --- Couplages entre voies (grille → drain) — toujours présent, éditable ---
-        cbox = QtWidgets.QGroupBox("Couplages entre voies (grille → drain)")
+        cbox = QtWidgets.QGroupBox(self.tr("Channel couplings (gate → drain)"))
         cv = QtWidgets.QVBoxLayout(cbox)
-        desc = QtWidgets.QLabel(
-            "Modélise un transistor : la tension d'une voie <b>grille</b> pilote le "
-            "courant tiré sur une ou plusieurs voies <b>drain</b> "
-            "(Id = gm·(Vg − vth), borné à imax) — utile pour tester l'asservissement "
-            "(SERVO). Sans couplage, chaque voie se comporte comme une simple charge "
-            "résistive (section ci-dessus).")
+        desc = QtWidgets.QLabel(self.tr(
+            "Models a transistor: the voltage of a <b>gate</b> channel drives the "
+            "current drawn on one or more <b>drain</b> channels "
+            "(Id = gm·(Vg − vth), capped at imax) — useful to test servo control "
+            "(SERVO). Without coupling, each channel behaves as a plain resistive "
+            "load (section above)."))
         desc.setWordWrap(True)
         cv.addWidget(desc)
         self._sim_coupling_table = QtWidgets.QTableWidget(0, 5)
         self._sim_coupling_table.setHorizontalHeaderLabels(
-            ["Grille", "Drains (voies/groupes, séparés par « , »)",
+            [self.tr("Gate"), self.tr("Drains (channels/groups, comma-separated)"),
              "gm (A/V)", "vth (V)", "imax (A)"])
         self._sim_coupling_table.horizontalHeader().setStretchLastSection(True)
         self._sim_coupling_table.setColumnWidth(1, 240)
         self._sim_coupling_table.verticalHeader().setVisible(False)
         cv.addWidget(self._sim_coupling_table)
         cbtn = QtWidgets.QHBoxLayout()
-        addb = QtWidgets.QPushButton("+ Ajouter un couplage")
+        addb = QtWidgets.QPushButton(self.tr("+ Add a coupling"))
         addb.clicked.connect(lambda: self._sim_add_coupling_row())
-        delb = QtWidgets.QPushButton("− Supprimer")
+        delb = QtWidgets.QPushButton(self.tr("− Remove"))
         delb.clicked.connect(self._sim_del_coupling)
         cbtn.addWidget(addb); cbtn.addWidget(delb); cbtn.addStretch(1)
         cv.addLayout(cbtn)
@@ -126,7 +126,7 @@ class SimMixin:
         gate.currentIndexChanged.connect(lambda *_: self._sim_apply_couplings())
         t.setCellWidget(r, 0, gate)
         drains = QtWidgets.QLineEdit(", ".join(map(str, cpl.get("drains", []))))
-        drains.setPlaceholderText("ex. D1, D2  ou  DRAIN")
+        drains.setPlaceholderText(self.tr("e.g. D1, D2  or  DRAIN"))
         drains.editingFinished.connect(self._sim_apply_couplings)
         t.setCellWidget(r, 1, drains)
         for col, (key, dec, lo, hi, step, dflt) in enumerate(

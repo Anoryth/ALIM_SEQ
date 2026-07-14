@@ -1,40 +1,40 @@
-# Politique de sécurité
+# Security policy
 
-## ⚠️ Avertissement de sûreté (à lire)
+## ⚠️ Safety warning (please read)
 
-ALIM_SEQ pilote des **alimentations de puissance** sur du matériel réel. Ses
-protections — coupure thermique, arrêts ordonnés, arrêt d'urgence — sont
-**logicielles**. Elles **ne remplacent pas** un dispositif de sûreté **matériel**
-(interlock, fusible, limiteur) ni le jugement de l'opérateur.
+ALIM_SEQ drives **power supplies** on real hardware. Its protections — thermal
+cut-off, orderly shutdowns, emergency stop — are **software**. They **do not
+replace** a **hardware** safety device (interlock, fuse, limiter) nor the operator's
+judgement.
 
-Le logiciel est fourni **sans aucune garantie** (licence GNU GPL-3.0), **n'est pas
-certifié** pour un usage critique, et son utilisation se fait **à vos propres
-risques**. Vérifiez toujours l'aire de sécurité (SOA), le câblage et la tenue en
-tension de votre montage.
+The software is provided **without any warranty** (GNU GPL-3.0 license), is **not
+certified** for critical use, and is used **at your own risk**. Always check the safe
+operating area (SOA), the wiring and the voltage rating of your setup.
 
-**Réseau.** Le protocole SCPI/TCPIP est **sans authentification** : tout hôte du
-réseau peut piloter les instruments. Raccordez le matériel sur un **réseau de banc
-isolé** (VLAN ou segment dédié), jamais exposé au réseau bureautique ou à Internet.
+**Network.** The SCPI/TCPIP protocol has **no authentication**: any host on the
+network can drive the instruments. Connect the hardware on an **isolated bench
+network** (VLAN or dedicated segment), never exposed to the office network or the
+Internet.
 
-## Versions supportées
+## Supported versions
 
-Seule la **dernière version** publiée reçoit des correctifs.
+Only the **latest** released version receives fixes.
 
-| Version | Supportée |
+| Version | Supported |
 |---|---|
-| dernière (`main`) | ✅ |
-| antérieures | ❌ |
+| latest (`main`) | ✅ |
+| earlier | ❌ |
 
-## Signaler une vulnérabilité
+## Reporting a vulnerability
 
-Merci de **ne pas** ouvrir d'issue publique pour une faille de sécurité.
+Please **do not** open a public issue for a security flaw.
 
-Utilisez la fonction **« Report a vulnerability »** (onglet *Security* → *Advisories*)
-du dépôt GitHub, qui ouvre un canal **privé** avec les mainteneurs. Décrivez :
+Use the **"Report a vulnerability"** feature (*Security* tab → *Advisories*) of the
+GitHub repository, which opens a **private** channel with the maintainers. Describe:
 
-- le composant concerné et la version,
-- les étapes de reproduction,
-- l'impact potentiel (sûreté matérielle, exécution, fuite d'information).
+- the affected component and version,
+- the reproduction steps,
+- the potential impact (hardware safety, code execution, information leak).
 
-Une réponse est visée sous **quelques jours ouvrés**. Merci de laisser un délai
-raisonnable de correction avant toute divulgation publique.
+A response is targeted within **a few business days**. Please allow a reasonable time
+to fix before any public disclosure.

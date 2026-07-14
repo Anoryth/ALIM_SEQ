@@ -1,19 +1,23 @@
-"""Dossier d'essai autonome : un enregistrement = un dossier re-exploitable.
+"""Self-contained test folder: one recording = one reusable folder.
 
-Chaque démarrage d'enregistrement crée ``logs/essais/AAAAMMJJ_HHMMSS[_<nom>]/``
-qui regroupe TOUT ce qu'il faut pour régénérer un rapport bien plus tard, sans
-l'application ouverte sur l'essai :
+Every recording start creates ``logs/essais/YYYYMMDD_HHMMSS[_<name>]/`` which
+gathers EVERYTHING needed to regenerate a report much later, without the
+application still open on the test:
 
-- ``mesures.csv``  : le CSV des mesures (écrit par le contrôleur) ;
-- ``config.json``  : copie à l'identique de la configuration active ;
-- ``sequence.seq`` : texte exact de la séquence exécutée (absent si pilotage
-  purement manuel) ;
-- ``journal.log``  : événements du contrôleur pendant l'essai ;
-- ``essai.json``   : métadonnées (version, mode, horodatages, empreintes, issue,
-  événements de sécurité).
+- ``mesures.csv``  : the measurement CSV (written by the controller);
+- ``config.json``  : byte-for-byte copy of the active configuration;
+- ``sequence.seq`` : exact text of the executed sequence (absent for purely
+  manual control);
+- ``journal.log``  : controller events during the test;
+- ``essai.json``   : metadata (version, mode, timestamps, hashes, outcome,
+  safety events).
 
-Ce module ne dépend PAS de Qt : il est testable seul. Le contrôleur lui délègue
-la tenue du dossier au fil de l'essai.
+This module does NOT depend on Qt: it is testable on its own. The controller
+delegates the upkeep of the folder to it over the course of the test.
+
+Note: the ``essai.json`` field names and the ``ISSUE_*`` string values below are
+a persisted on-disk schema (also read back by ``rapport.py``), NOT display text —
+they are kept as-is so existing test folders remain readable.
 """
 
 from __future__ import annotations
@@ -27,10 +31,10 @@ from typing import List, Optional
 
 from . import __version__
 
-# Issues possibles d'un essai, du moins au plus grave. Le rang sert de garde
-# anti-déclassement : une issue plus grave ne peut pas être écrasée par une
-# moins grave (un déclenchement de sécurité reste inscrit même si la
-# désalimentation se « termine » ensuite proprement).
+# Possible test outcomes, from least to most severe. The rank acts as an
+# anti-downgrade guard: a more severe outcome cannot be overwritten by a less
+# severe one (a safety trip stays recorded even if the power-down later
+# "finishes" cleanly). These string values are a persisted schema — keep as-is.
 ISSUE_EN_COURS = "en_cours"
 ISSUE_TERMINE = "termine"
 ISSUE_ARRET_UTILISATEUR = "arret_utilisateur"
@@ -46,9 +50,9 @@ _FORBIDDEN = set('/\\:*?"<>|')
 
 
 def safe_folder_name(nom: str) -> str:
-    """Nettoie un nom d'essai pour en faire un composant de dossier sûr :
-    espaces -> ``_``, caractères interdits ``/\\:*?"<>|`` retirés, contrôle
-    supprimé. Retourne "" si rien d'exploitable ne subsiste."""
+    """Sanitize a test name into a safe folder component: spaces -> ``_``,
+    forbidden characters ``/\\:*?"<>|`` removed, control characters stripped.
+    Returns "" if nothing usable remains."""
     out = []
     for ch in (nom or "").strip():
         if ch in _FORBIDDEN:
@@ -59,8 +63,8 @@ def safe_folder_name(nom: str) -> str:
             continue
         else:
             out.append(ch)
-    # Comprime les tirets bas multiples, retire ceux de bord et les points de bord
-    # (un dossier ne devrait pas commencer par un point ni finir par un espace/point).
+    # Collapse repeated underscores, strip leading/trailing underscores and dots
+    # (a folder should not start with a dot nor end with a space/dot).
     name = "".join(out).strip("_. ")
     while "__" in name:
         name = name.replace("__", "_")
@@ -72,8 +76,8 @@ def _sha256(data: bytes) -> str:
 
 
 class DossierEssai:
-    """Tient le dossier d'un essai en cours. Créé par ``start_recording`` et
-    finalisé par ``stop_recording`` (ou ``close``) côté contrôleur."""
+    """Maintains the folder of an ongoing test. Created by ``start_recording``
+    and finalized by ``stop_recording`` (or ``close``) on the controller side."""
 
     def __init__(self, ctrl, nom: str = "", operateur: str = "",
                  base_dir="logs/essais"):
@@ -87,10 +91,11 @@ class DossierEssai:
         self.finished_at: Optional[datetime] = None
         safe = safe_folder_name(self.nom)
         folder = stamp.strftime("%Y%m%d_%H%M%S") + (f"_{safe}" if safe else "")
-        # Anti-collision : l'horodatage est à la seconde — deux essais démarrés dans
-        # la même seconde (stop/start rapide) partageraient le dossier et le second
-        # ÉCRASERAIT mesures.csv. On suffixe _2, _3… ; mkdir(exist_ok=False) rend le
-        # test-et-création atomique (pas de TOCTOU entre deux instances).
+        # Collision guard: the timestamp is second-resolution — two tests started
+        # within the same second (fast stop/start) would share the folder and the
+        # second one would OVERWRITE mesures.csv. We suffix _2, _3…; mkdir(
+        # exist_ok=False) makes the test-and-create atomic (no TOCTOU across
+        # instances).
         base = Path(base_dir)
         path = base / folder
         n = 2
@@ -117,17 +122,17 @@ class DossierEssai:
         self._journal = (self.path / "journal.log").open("a", encoding="utf-8")
 
         self._archive_config()
-        # S'abonne au journal du contrôleur le temps de l'essai.
+        # Subscribe to the controller log for the duration of the test.
         self.ctrl.add_log_listener(self._on_log)
-        # Écrit une première version d'essai.json (issue = en_cours) : le dossier
-        # est déjà exploitable même si l'application est tuée en cours d'essai.
+        # Write a first version of essai.json (outcome = en_cours): the folder is
+        # already usable even if the application is killed mid-test.
         self._write_metadata()
 
-    # ------------------------------------------------------------- archivage
+    # ------------------------------------------------------------- archiving
     def _archive_config(self) -> None:
-        """Copie la configuration active dans ``config.json`` et calcule son
-        empreinte. Copie octet pour octet si la config vient d'un fichier
-        (``source_path``), sinon sérialise l'état mémoire."""
+        """Copy the active configuration into ``config.json`` and compute its
+        hash. Byte-for-byte copy if the config came from a file (``source_path``),
+        otherwise serialize the in-memory state."""
         from .config import config_to_dict
 
         cfg = self.ctrl.cfg
@@ -144,8 +149,8 @@ class DossierEssai:
         self._config_sha = _sha256(content)
 
     def write_sequence(self, text: str) -> None:
-        """Archive le texte exact de la séquence exécutée (idempotent : la
-        première séquence de l'essai fait foi)."""
+        """Archive the exact text of the executed sequence (idempotent: the first
+        sequence of the test is authoritative)."""
         if self._has_sequence or not text:
             return
         data = text.encode("utf-8")
@@ -167,8 +172,8 @@ class DossierEssai:
 
     # ------------------------------------------------------------------ issue
     def set_issue(self, issue: str, cause: str = "") -> None:
-        """Fixe l'issue de l'essai en respectant le rang de gravité : une issue
-        plus grave n'est jamais déclassée."""
+        """Set the test outcome, honoring the severity rank: a more severe
+        outcome is never downgraded."""
         with self._lock:
             if _ISSUE_RANK.get(issue, 0) < _ISSUE_RANK.get(self.issue, 0):
                 return
@@ -177,8 +182,9 @@ class DossierEssai:
                 self.cause = cause
 
     def add_safety_event(self, kind: str, message: str) -> None:
-        """Consigne un événement de sécurité horodaté (trip, coupure dure,
-        perte de comm…)."""
+        """Record a timestamped safety event (trip, hard cut-off, comm loss…).
+
+        The ``horodatage`` key is part of the persisted schema — kept as-is."""
         evt = {"horodatage": datetime.now().isoformat(timespec="seconds"),
                "type": kind, "message": message}
         with self._lock:
@@ -189,11 +195,11 @@ class DossierEssai:
         self.conclusion = conclusion or ""
         self._write_metadata()
 
-    # -------------------------------------------------------------- finalisation
+    # -------------------------------------------------------------- finalization
     def finalize(self) -> None:
-        """Fige l'horodatage de fin, écrit la version finale d'``essai.json`` et
-        se désabonne du journal. Si l'issue est restée ``en_cours`` (arrêt propre
-        sans séquence, ou sans trip), elle devient ``termine``."""
+        """Freeze the end timestamp, write the final version of ``essai.json`` and
+        unsubscribe from the log. If the outcome stayed ``en_cours`` (clean stop
+        without a sequence, or without a trip), it becomes ``termine``."""
         with self._lock:
             already = self.finished_at is not None
             self.finished_at = self.finished_at or datetime.now()
@@ -211,7 +217,7 @@ class DossierEssai:
             except Exception:
                 pass
 
-    # -------------------------------------------------------------- métadonnées
+    # -------------------------------------------------------------- metadata
     def _metadata(self) -> dict:
         cadence = {}
         try:

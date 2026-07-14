@@ -22,6 +22,8 @@ import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from .i18n import _
+
 
 def _rail_fault(voltage: float, v_ref: float, fault_margin: float) -> bool:
     """Vrai si la tension d'un pont diviseur colle à un rail (0 ou v_ref) à
@@ -52,7 +54,7 @@ class PolynomialConverter(TemperatureConverter):
 
     def __init__(self, coeffs: List[float]):
         if not coeffs:
-            raise ValueError("PolynomialConverter: 'coeffs' ne peut pas être vide")
+            raise ValueError(_("PolynomialConverter: 'coeffs' cannot be empty"))
         self.coeffs = [float(c) for c in coeffs]
 
     def to_celsius(self, voltage: float) -> float:
@@ -74,7 +76,7 @@ class TableConverter(TemperatureConverter):
 
     def __init__(self, points: List[Tuple[float, float]]):
         if len(points) < 2:
-            raise ValueError("TableConverter: au moins 2 points sont nécessaires")
+            raise ValueError(_("TableConverter: at least 2 points are required"))
         pts = sorted(((float(v), float(t)) for v, t in points), key=lambda p: p[0])
         self.v = [p[0] for p in pts]
         self.t = [p[1] for p in pts]
@@ -140,9 +142,9 @@ class NTCConverter(TemperatureConverter):
         # une valeur nulle/négative produirait une division par zéro EN COURS d'essai,
         # dans la boucle de sécurité. On refuse à la construction (= à la validation).
         if self.beta == 0:
-            raise ValueError("NTCConverter: 'beta' ne peut pas être 0.")
+            raise ValueError(_("NTCConverter: 'beta' cannot be 0."))
         if self.r_series <= 0 or self.v_ref <= 0 or self.r0 <= 0:
-            raise ValueError("NTCConverter: 'r_series', 'v_ref' et 'r0' doivent être > 0.")
+            raise ValueError(_("NTCConverter: 'r_series', 'v_ref' and 'r0' must be > 0."))
         self.pullup_to_vref = bool(pullup_to_vref)
         self.fault_margin = float(fault_margin)
 
@@ -206,9 +208,9 @@ class PTCConverter(TemperatureConverter):
         # provoquerait une ZeroDivisionError à la 1re mesure, dans la boucle de
         # sécurité. Refusé à la construction (= détecté dès la validation de config).
         if self.alpha == 0:
-            raise ValueError("PTCConverter: 'alpha' ne peut pas être 0.")
+            raise ValueError(_("PTCConverter: 'alpha' cannot be 0."))
         if self.r_series <= 0 or self.v_ref <= 0 or self.r0 <= 0:
-            raise ValueError("PTCConverter: 'r_series', 'v_ref' et 'r0' doivent être > 0.")
+            raise ValueError(_("PTCConverter: 'r_series', 'v_ref' and 'r0' must be > 0."))
         self.pullup_to_vref = bool(pullup_to_vref)
         self.fault_margin = float(fault_margin)
 
@@ -260,7 +262,7 @@ class ThermocoupleConverter(TemperatureConverter):
                  t_min: Optional[float] = None, t_max: Optional[float] = None):
         self.tc = str(tc_type).upper()
         if self.tc not in self._INV:
-            raise ValueError(f"Thermocouple: type {tc_type!r} non supporté (K ou J).")
+            raise ValueError(_("Thermocouple: type {!r} not supported (K or J).").format(tc_type))
         self.cjc_c = float(cjc_c)
         self.gain = float(gain) or 1.0
         self.offset_mv = float(offset_mv)
@@ -322,7 +324,7 @@ def parse_table_csv(text: str) -> List[List[float]]:
         except ValueError:
             continue  # ligne d'en-tête / non numérique
     if len(pts) < 2:
-        raise ValueError("CSV: au moins 2 points 'tension,°C' attendus.")
+        raise ValueError(_("CSV: at least 2 'voltage,°C' points expected."))
     return pts
 
 

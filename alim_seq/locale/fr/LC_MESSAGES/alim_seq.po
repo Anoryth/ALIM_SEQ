@@ -1,0 +1,1073 @@
+# French translations for ALIM_SEQ package.
+# Copyright (C) 2026 THE ALIM_SEQ'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the ALIM_SEQ package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ALIM_SEQ\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-14 10:26+0200\n"
+"PO-Revision-Date: 2026-07-14 10:26+0200\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: alim_seq/expressions.py:57
+msgid "invalid expression: {!r} ({})"
+msgstr "expression invalide : {!r} ({})"
+
+#: alim_seq/expressions.py:76
+msgid "operator not allowed: {}"
+msgstr "opérateur non autorisé : {}"
+
+#: alim_seq/expressions.py:81
+msgid "unary operator not allowed: {}"
+msgstr "opérateur unaire non autorisé : {}"
+
+#: alim_seq/expressions.py:90
+msgid "non-numeric constant: {!r}"
+msgstr "constante non numérique : {!r}"
+
+#: alim_seq/expressions.py:92
+msgid "element not allowed in expression: {}"
+msgstr "élément non autorisé dans l'expression : {}"
+
+#: alim_seq/expressions.py:98
+msgid "invalid function call"
+msgstr "appel de fonction invalide"
+
+#: alim_seq/expressions.py:106
+msgid "{}(...) expects a single channel name"
+msgstr "{}(...) attend un seul nom de voie"
+
+#: alim_seq/expressions.py:128
+msgid "element not allowed: {}"
+msgstr "élément non autorisé : {}"
+
+#: alim_seq/temperature.py:57
+msgid "PolynomialConverter: 'coeffs' cannot be empty"
+msgstr "PolynomialConverter : 'coeffs' ne peut pas être vide"
+
+#: alim_seq/temperature.py:79
+msgid "TableConverter: at least 2 points are required"
+msgstr "TableConverter : au moins 2 points sont nécessaires"
+
+#: alim_seq/temperature.py:145
+msgid "NTCConverter: 'beta' cannot be 0."
+msgstr "NTCConverter : 'beta' ne peut pas être 0."
+
+#: alim_seq/temperature.py:147
+msgid "NTCConverter: 'r_series', 'v_ref' and 'r0' must be > 0."
+msgstr "NTCConverter : 'r_series', 'v_ref' et 'r0' doivent être > 0."
+
+#: alim_seq/temperature.py:211
+msgid "PTCConverter: 'alpha' cannot be 0."
+msgstr "PTCConverter : 'alpha' ne peut pas être 0."
+
+#: alim_seq/temperature.py:213
+msgid "PTCConverter: 'r_series', 'v_ref' and 'r0' must be > 0."
+msgstr "PTCConverter : 'r_series', 'v_ref' et 'r0' doivent être > 0."
+
+#: alim_seq/temperature.py:265
+msgid "Thermocouple: type {!r} not supported (K or J)."
+msgstr "Thermocouple : type {!r} non supporté (K ou J)."
+
+#: alim_seq/temperature.py:327
+msgid "CSV: at least 2 'voltage,°C' points expected."
+msgstr "CSV : au moins 2 points 'tension,°C' attendus."
+
+#: alim_seq/psu.py:43
+msgid "pyvisa is required for the VISA scan"
+msgstr "pyvisa requis pour le scan VISA"
+
+#: alim_seq/psu.py:80
+msgid "pyvisa is required to test a VISA address"
+msgstr "pyvisa requis pour tester une adresse VISA"
+
+#: alim_seq/psu.py:85
+msgid "cannot open: {}"
+msgstr "ouverture impossible : {}"
+
+#: alim_seq/psu.py:92
+msgid "empty response to '*IDN?'"
+msgstr "réponse vide à '*IDN?'"
+
+#: alim_seq/psu.py:95
+msgid "no response to '*IDN?': {}"
+msgstr "pas de réponse à '*IDN?' : {}"
+
+#: alim_seq/psu.py:195
+msgid ""
+"pyvisa is not installed (required in real-hardware mode). Install pyvisa, or "
+"switch to simulation ('simulate': true)."
+msgstr "pyvisa n'est pas installé (requis en mode matériel réel). Installer pyvisa, ou passer en simulation ('simulate': true)."
+
+#: alim_seq/psu.py:200
+msgid "opening VISA (backend={})…"
+msgstr "ouverture VISA (backend={})…"
+
+#: alim_seq/psu.py:201
+msgid "system"
+msgstr "système"
+
+#: alim_seq/psu.py:209
+msgid ""
+"cannot open VISA: {}. Check the 'resource' string and the installed VISA "
+"backend."
+msgstr "ouverture VISA impossible : {}. Vérifier la chaîne 'resource' et le backend VISA installé."
+
+#: alim_seq/psu.py:235
+msgid ""
+"no response to '*IDN?': {}.\n"
+"  Hints: raw socket -> the 'resource' must end with '::5025::SOCKET'; USB -> "
+"set the supply to TMC mode (NOT CDC); check IP/cable/firewall; VXI-11 "
+"(::inst0::INSTR) may time out depending on the VISA."
+msgstr "pas de réponse à '*IDN?' : {}.\n  Pistes : socket brut -> la 'resource' doit finir par '::5025::SOCKET' ; USB -> régler l'alim en mode TMC (PAS CDC) ; vérifier IP/câble/pare-feu ; VXI-11 (::inst0::INSTR) peut timeouter selon la VISA."
+
+#: alim_seq/psu.py:243
+msgid ""
+"WARNING: '{}' does not look like an R&S HMP — check this is the right "
+"resource."
+msgstr "ATTENTION : '{}' ne ressemble pas à un R&S HMP — vérifier que c'est la bonne ressource."
+
+#: alim_seq/psu.py:259
+msgid ""
+"SCPI initialization failed: {}. The instrument answers *IDN? but not the "
+"configuration commands."
+msgstr "échec d'initialisation SCPI : {}. L'instrument répond à *IDN? mais pas aux commandes de configuration."
+
+#: alim_seq/psu.py:262
+msgid "{} ready ({} channels)."
+msgstr "{} prêt ({} voies)."
+
+#: alim_seq/psu.py:571
+msgid "Unknown supply model: {!r}. Known: {}"
+msgstr "Modèle d'alimentation inconnu : {!r}. Connus : {}"
+
+#: alim_seq/instrument.py:163
+msgid "NI-DAQ driver: 'sensors' parameter required."
+msgstr "Driver NI-DAQ : paramètre 'sensors' requis."
+
+#: alim_seq/relay.py:74 alim_seq/controller.py:691 alim_seq/controller.py:709
+msgid "Unknown relay output: {!r}"
+msgstr "Sortie de relais inconnue : {!r}"
+
+#: alim_seq/controller.py:423
+msgid "Channel initialization: {}"
+msgstr "Initialisation des voies : {}"
+
+#: alim_seq/controller.py:428
+msgid "Connection failed:"
+msgstr "Échec de connexion :"
+
+#: alim_seq/controller.py:437
+msgid "Hardware connected ({})."
+msgstr "Matériel connecté ({})."
+
+#: alim_seq/controller.py:438 alim_seq/rapport.py:362 alim_seq/rapport.py:1030
+msgid "SIMULATION"
+msgstr "SIMULATION"
+
+#: alim_seq/controller.py:438
+msgid "REAL"
+msgstr "RÉEL"
+
+#: alim_seq/controller.py:457
+msgid "Auto-reconnect in {:.0f} s…"
+msgstr "Auto-reconnexion dans {:.0f} s…"
+
+#: alim_seq/controller.py:472
+msgid "Reconnection already in progress — request ignored."
+msgstr "Reconnexion déjà en cours — demande ignorée."
+
+#: alim_seq/controller.py:475
+msgid "Attempting to reconnect…"
+msgstr "Tentative de reconnexion…"
+
+#: alim_seq/controller.py:527
+msgid "Hardware disconnected."
+msgstr "Matériel déconnecté."
+
+#: alim_seq/controller.py:556
+msgid "Application log: {}"
+msgstr "Journal applicatif : {}"
+
+#: alim_seq/controller.py:662
+msgid "Series group {} {}"
+msgstr "Groupe série {} {}"
+
+#: alim_seq/controller.py:665
+msgid "Refused: safety active (tripped). Rearm before switching on."
+msgstr "Refusé : sécurité active (tripped). Réarmer avant d'allumer."
+
+#: alim_seq/controller.py:672
+msgid "Channel {} {}"
+msgstr "Voie {} {}"
+
+#: alim_seq/controller.py:693 alim_seq/controller.py:700
+msgid "Refused: safety active (tripped). Rearm before closing a relay."
+msgstr "Refusé : sécurité active (tripped). Réarmer avant de fermer un relais."
+
+#: alim_seq/controller.py:703
+msgid "Relay {} {}"
+msgstr "Relais {} {}"
+
+#: alim_seq/controller.py:704
+msgid "ON (closed)"
+msgstr "ON (fermé)"
+
+#: alim_seq/controller.py:704
+msgid "OFF (open)"
+msgstr "OFF (ouvert)"
+
+#: alim_seq/controller.py:749
+msgid "Relay {} safe-state error: {}"
+msgstr "Relais {} état sûr en erreur : {}"
+
+#: alim_seq/controller.py:887
+msgid "unknown channel in expression: {!r}"
+msgstr "voie inconnue dans l'expression : {!r}"
+
+#: alim_seq/controller.py:897
+msgid "unknown quantity: {}"
+msgstr "grandeur inconnue : {}"
+
+#: alim_seq/controller.py:912
+msgid ""
+"Refused: hardware not connected. Check the link before starting a sequence."
+msgstr "Refusé : matériel non connecté. Vérifier la liaison avant de lancer une séquence."
+
+#: alim_seq/controller.py:916
+msgid "Refused: safety active. Rearm before starting a sequence."
+msgstr "Refusé : sécurité active. Réarmer avant de lancer une séquence."
+
+#: alim_seq/controller.py:928
+msgid "Stop refused: safety power-down in progress."
+msgstr "Stop refusé : désalimentation de sécurité en cours."
+
+#: alim_seq/controller.py:938
+msgid "Shutdown sequence: {}"
+msgstr "Séquentiel d'arrêt : {}"
+
+#: alim_seq/controller.py:940
+msgid "Shutdown sequence: automatic orderly power-off."
+msgstr "Séquentiel d'arrêt : extinction auto ordonnée."
+
+#: alim_seq/controller.py:965 alim_seq/controller.py:967
+msgid "Safety power-down"
+msgstr "Désalimentation de sécurité"
+
+#: alim_seq/controller.py:966
+msgid "!!! {} — orderly power-down in progress."
+msgstr "!!! {} — désalimentation ordonnée en cours."
+
+#: alim_seq/controller.py:969
+msgid "Shutdown sequence triggered."
+msgstr "Séquentiel d'arrêt déclenché."
+
+#: alim_seq/controller.py:989
+msgid "User sequence stuck: switching to hard cut-off."
+msgstr "Séquence utilisateur bloquée : bascule en coupure dure."
+
+#: alim_seq/controller.py:991
+msgid "Orderly power-down impossible (sequence stuck) — hard cut-off"
+msgstr "Désalimentation ordonnée impossible (séquence bloquée) — coupure dure"
+
+#: alim_seq/controller.py:1006
+msgid "Invalid shutdown sequence ({}) — automatic power-off."
+msgstr "Séquentiel d'arrêt invalide ({}) — extinction auto."
+
+#: alim_seq/controller.py:1019
+msgid "Power-down too long (> {:.0f}s) — hard cut-off."
+msgstr "Désalimentation trop longue (> {:.0f}s) — coupure dure."
+
+#: alim_seq/controller.py:1021
+msgid "Orderly power-down timed out — hard cut-off"
+msgstr "Désalimentation ordonnée en timeout — coupure dure"
+
+#: alim_seq/controller.py:1026
+msgid "Orderly power-down failed: {}"
+msgstr "Échec désalimentation ordonnée : {}"
+
+#: alim_seq/controller.py:1029
+msgid "Orderly power-down impossible ({}) — hard cut-off"
+msgstr "Désalimentation ordonnée impossible ({}) — coupure dure"
+
+#: alim_seq/controller.py:1056
+msgid "Emergency stop"
+msgstr "Arrêt d'urgence"
+
+#: alim_seq/controller.py:1068
+msgid "Cut-off {} error: {}"
+msgstr "Coupure {} en erreur : {}"
+
+#: alim_seq/controller.py:1083
+msgid "!!! {} — all channels cut off."
+msgstr "!!! {} — toutes les voies coupées."
+
+#: alim_seq/controller.py:1099
+msgid "Safety rearmed."
+msgstr "Sécurité réarmée."
+
+#: alim_seq/controller.py:1150
+msgid "Temperature read error: {}"
+msgstr "Erreur lecture température : {}"
+
+#: alim_seq/controller.py:1196
+msgid "Critical temperature {} = {:.1f}°C"
+msgstr "Température critique {} = {:.1f}°C"
+
+#: alim_seq/controller.py:1206
+msgid "Sensor fault: {}"
+msgstr "Capteur en défaut : {}"
+
+#: alim_seq/controller.py:1216
+msgid "Temperature measurement lost (NI module)"
+msgstr "Perte de la mesure de température (module NI)"
+
+#: alim_seq/controller.py:1238
+msgid "Power-supply measurement error: {}"
+msgstr "Erreur mesure alimentation : {}"
+
+#: alim_seq/controller.py:1272
+msgid ""
+"!!! Measurements {}: instrument unavailable for {} cycles (VISA link "
+"frozen?) — values frozen."
+msgstr "!!! Mesures {} : instrument indisponible depuis {} cycles (liaison VISA figée ?) — valeurs figées."
+
+#: alim_seq/controller.py:1288
+msgid "Measurements {}: instrument available again."
+msgstr "Mesures {} : instrument de nouveau disponible."
+
+#: alim_seq/controller.py:1317
+msgid "Supply fault: "
+msgstr "Défaut alim : "
+
+#: alim_seq/controller.py:1321
+msgid "!!! Hardware fault {} on channel {}"
+msgstr "!!! Défaut matériel {} sur la voie {}"
+
+#: alim_seq/controller.py:1326
+msgid "Supply hardware fault: "
+msgstr "Défaut matériel alim : "
+
+#: alim_seq/controller.py:1338
+msgid "Communication lost with a power supply"
+msgstr "Perte de communication avec une alimentation"
+
+#: alim_seq/controller.py:1446
+msgid "{}: sensor fault"
+msgstr "{} : capteur en défaut"
+
+#: alim_seq/controller.py:1448
+msgid "{} = {:.1f}°C >= critical"
+msgstr "{} = {:.1f}°C >= critique"
+
+#: alim_seq/controller.py:1450
+msgid "{} = {:.1f}°C >= warning"
+msgstr "{} = {:.1f}°C >= alerte"
+
+#: alim_seq/controller_recording.py:56
+msgid "Recording started: {}"
+msgstr "Enregistrement démarré : {}"
+
+#: alim_seq/controller_recording.py:70
+msgid "Recording stopped: {}"
+msgstr "Enregistrement arrêté : {}"
+
+#: alim_seq/controller_servo.py:76 alim_seq/controller_servo.py:161
+msgid "SERVO aborted."
+msgstr "SERVO avorté."
+
+#: alim_seq/controller_servo.py:79 alim_seq/controller_servo.py:164
+msgid "SERVO timeout after {:.1f}s."
+msgstr "SERVO timeout après {:.1f}s."
+
+#: alim_seq/controller_simtune.py:57
+msgid "Sim coupling: unknown drain channel {!r}, ignored."
+msgstr "Couplage simu : voie drain inconnue {!r}, ignorée."
+
+#: alim_seq/controller_simtune.py:66
+msgid "Sim coupling: unknown gate {!r}."
+msgstr "Couplage simu : grille inconnue {!r}."
+
+#: alim_seq/controller_simtune.py:68
+msgid "Sim coupling installed: {} -> {} (Id=gm*(Vg-{}), gm={}, imax={})"
+msgstr "Couplage simu installé : {} -> {} (Id=gm*(Vg-{}), gm={}, imax={})"
+
+#: alim_seq/rapport.py:306
+msgid "Completed without safety event"
+msgstr "Terminé sans événement de sécurité"
+
+#: alim_seq/rapport.py:309
+msgid "Interrupted by the user"
+msgstr "Interrompu par l'utilisateur"
+
+#: alim_seq/rapport.py:312
+msgid "SAFETY TRIP"
+msgstr "DÉCLENCHEMENT DE SÉCURITÉ"
+
+#: alim_seq/rapport.py:313
+msgid "In progress"
+msgstr "En cours"
+
+#: alim_seq/rapport.py:320
+msgid "⚠ SIMULATION TEST — no real hardware driven"
+msgstr "⚠ ESSAI EN SIMULATION — aucun matériel réel piloté"
+
+#: alim_seq/rapport.py:362 alim_seq/rapport.py:1030
+msgid "REAL HARDWARE"
+msgstr "MATÉRIEL RÉEL"
+
+#: alim_seq/rapport.py:367 alim_seq/rapport.py:1029 alim_seq/rapport.py:1292
+#: alim_seq/rapport.py:1301
+msgid "Test report — ALIM_SEQ"
+msgstr "Rapport d'essai — ALIM_SEQ"
+
+#: alim_seq/rapport.py:371 alim_seq/rapport.py:1046
+msgid "(unnamed)"
+msgstr "(sans nom)"
+
+#: alim_seq/rapport.py:372 alim_seq/rapport.py:421 alim_seq/rapport.py:1047
+#: alim_seq/rapport.py:1104
+msgid "(not provided)"
+msgstr "(non renseigné)"
+
+#: alim_seq/rapport.py:373 alim_seq/rapport.py:1046
+msgid "Test name"
+msgstr "Nom de l'essai"
+
+#: alim_seq/rapport.py:375 alim_seq/rapport.py:1047
+msgid "Operator"
+msgstr "Opérateur"
+
+#: alim_seq/rapport.py:377 alim_seq/rapport.py:1048
+msgid "Start"
+msgstr "Début"
+
+#: alim_seq/rapport.py:379 alim_seq/rapport.py:1048
+msgid "Duration"
+msgstr "Durée"
+
+#: alim_seq/rapport.py:381 alim_seq/rapport.py:1049
+msgid "ALIM_SEQ version"
+msgstr "Version ALIM_SEQ"
+
+#: alim_seq/rapport.py:383 alim_seq/rapport.py:1049
+msgid "Mode"
+msgstr "Mode"
+
+#: alim_seq/rapport.py:391 alim_seq/rapport.py:1067
+msgid "Summary"
+msgstr "Synthèse"
+
+#: alim_seq/rapport.py:394 alim_seq/rapport.py:1091
+msgid "in-memory configuration (serialized)"
+msgstr "configuration en mémoire (sérialisée)"
+
+#: alim_seq/rapport.py:406
+msgid "Test outcome"
+msgstr "Issue de l'essai"
+
+#: alim_seq/rapport.py:408 alim_seq/rapport.py:1094
+msgid " · CSV {} KiB"
+msgstr " · CSV {} Kio"
+
+#: alim_seq/rapport.py:409 alim_seq/rapport.py:1093
+msgid "{} points · {} pt/s"
+msgstr "{} points · {} pt/s"
+
+#: alim_seq/rapport.py:410
+msgid "Measurement points"
+msgstr "Points de mesure"
+
+#: alim_seq/rapport.py:412
+msgid "Configuration"
+msgstr "Configuration"
+
+#: alim_seq/rapport.py:417 alim_seq/rapport.py:1100
+msgid "Operator conclusion"
+msgstr "Conclusion de l'opérateur"
+
+#: alim_seq/rapport.py:425 alim_seq/rapport.py:1106
+msgid "Operator sign-off"
+msgstr "Visa opérateur"
+
+#: alim_seq/rapport.py:426 alim_seq/rapport.py:1107
+msgid "Date"
+msgstr "Date"
+
+#: alim_seq/rapport.py:431
+msgid "Charts"
+msgstr "Graphiques"
+
+#: alim_seq/rapport.py:434
+msgid "Measurements during the test (with events)"
+msgstr "Mesures pendant l'essai (avec événements)"
+
+#: alim_seq/rapport.py:435
+msgid "Zoom on the safety trip"
+msgstr "Zoom sur le déclenchement de sécurité"
+
+#: alim_seq/rapport.py:436
+msgid "Voltages and currents"
+msgstr "Tensions et courants"
+
+#: alim_seq/rapport.py:436
+msgid "Temperatures"
+msgstr "Températures"
+
+#: alim_seq/rapport.py:451 alim_seq/rapport.py:1151
+msgid "Per-channel statistics"
+msgstr "Statistiques par voie"
+
+#: alim_seq/rapport.py:457 alim_seq/rapport.py:1168
+msgid "Channel"
+msgstr "Voie"
+
+#: alim_seq/rapport.py:457 alim_seq/rapport.py:1168
+msgid "V min"
+msgstr "V min"
+
+#: alim_seq/rapport.py:457 alim_seq/rapport.py:523 alim_seq/rapport.py:1168
+#: alim_seq/rapport.py:1238
+msgid "V max"
+msgstr "V max"
+
+#: alim_seq/rapport.py:457 alim_seq/rapport.py:1168
+msgid "V avg"
+msgstr "V moy"
+
+#: alim_seq/rapport.py:458 alim_seq/rapport.py:1168
+msgid "I min"
+msgstr "I min"
+
+#: alim_seq/rapport.py:458 alim_seq/rapport.py:523 alim_seq/rapport.py:1168
+#: alim_seq/rapport.py:1238
+msgid "I max"
+msgstr "I max"
+
+#: alim_seq/rapport.py:458 alim_seq/rapport.py:1169
+msgid "I avg"
+msgstr "I moy"
+
+#: alim_seq/rapport.py:458 alim_seq/rapport.py:1169
+msgid "CC time"
+msgstr "Temps CC"
+
+#: alim_seq/rapport.py:459 alim_seq/rapport.py:1169
+msgid "End setpoint"
+msgstr "Consigne fin"
+
+#: alim_seq/rapport.py:476 alim_seq/rapport.py:1174
+msgid "No channel recorded."
+msgstr "Aucune voie enregistrée."
+
+#: alim_seq/rapport.py:481 alim_seq/rapport.py:1179
+msgid "Per-sensor statistics"
+msgstr "Statistiques par capteur"
+
+#: alim_seq/rapport.py:485 alim_seq/rapport.py:1195
+msgid "Sensor"
+msgstr "Capteur"
+
+#: alim_seq/rapport.py:485 alim_seq/rapport.py:1195
+msgid "min"
+msgstr "min"
+
+#: alim_seq/rapport.py:485 alim_seq/rapport.py:1195
+msgid "max"
+msgstr "max"
+
+#: alim_seq/rapport.py:485 alim_seq/rapport.py:1195
+msgid "avg"
+msgstr "moy"
+
+#: alim_seq/rapport.py:485 alim_seq/rapport.py:536 alim_seq/rapport.py:1247
+msgid "Warning"
+msgstr "Alerte"
+
+#: alim_seq/rapport.py:486 alim_seq/rapport.py:1196
+msgid "Excursions"
+msgstr "Excursions"
+
+#: alim_seq/rapport.py:486
+msgid "Time &gt; warning"
+msgstr "Durée &gt; alerte"
+
+#: alim_seq/rapport.py:486
+msgid "Time &gt; critical"
+msgstr "Durée &gt; critique"
+
+#: alim_seq/rapport.py:505 alim_seq/rapport.py:1203
+msgid "Timeline"
+msgstr "Chronologie"
+
+#: alim_seq/rapport.py:509 alim_seq/rapport.py:1223
+msgid "Appendix A — Executed sequence"
+msgstr "Annexe A — Séquence exécutée"
+
+#: alim_seq/rapport.py:516 alim_seq/rapport.py:1228
+msgid "No sequence (manual control)."
+msgstr "Aucune séquence (pilotage manuel)."
+
+#: alim_seq/rapport.py:518 alim_seq/rapport.py:1231
+msgid "Appendix B — Configuration"
+msgstr "Annexe B — Configuration"
+
+#: alim_seq/rapport.py:522 alim_seq/rapport.py:1234
+msgid "Channels"
+msgstr "Voies"
+
+#: alim_seq/rapport.py:523 alim_seq/rapport.py:1238
+msgid "Label"
+msgstr "Libellé"
+
+#: alim_seq/rapport.py:523 alim_seq/rapport.py:1238
+msgid "Supply / Channel"
+msgstr "Alim / Canal"
+
+#: alim_seq/rapport.py:535 alim_seq/rapport.py:1243
+msgid "Sensors"
+msgstr "Capteurs"
+
+#: alim_seq/rapport.py:536 alim_seq/rapport.py:1247
+msgid "Name"
+msgstr "Nom"
+
+#: alim_seq/rapport.py:536 alim_seq/rapport.py:1247
+msgid "Critical"
+msgstr "Critique"
+
+#: alim_seq/rapport.py:536 alim_seq/rapport.py:1247
+msgid "Converter"
+msgstr "Convertisseur"
+
+#: alim_seq/rapport.py:546 alim_seq/rapport.py:1250
+msgid "Full JSON"
+msgstr "JSON complet"
+
+#: alim_seq/rapport.py:565 alim_seq/rapport.py:1127
+msgid "Event markers (numbers refer to the chart badges):"
+msgstr "Repères d'événements (les numéros renvoient aux badges du graphe) :"
+
+#: alim_seq/rapport.py:581
+msgid "Log unavailable."
+msgstr "Journal indisponible."
+
+#: alim_seq/rapport.py:597 alim_seq/rapport.py:1220
+msgid "No event."
+msgstr "Aucun événement."
+
+#: alim_seq/rapport.py:756
+msgid "Measured voltage (V)"
+msgstr "Tension mesurée (V)"
+
+#: alim_seq/rapport.py:757
+msgid "Measured current (A)"
+msgstr "Courant mesuré (A)"
+
+#: alim_seq/rapport.py:778 alim_seq/rapport.py:884
+msgid "Temperature (°C)"
+msgstr "Température (°C)"
+
+#: alim_seq/rapport.py:784 alim_seq/rapport.py:874
+msgid "warning threshold"
+msgstr "seuil alerte"
+
+#: alim_seq/rapport.py:784 alim_seq/rapport.py:878
+msgid "critical threshold"
+msgstr "seuil critique"
+
+#: alim_seq/rapport.py:789 alim_seq/rapport.py:883
+msgid "Time (s)"
+msgstr "Temps (s)"
+
+#: alim_seq/rapport.py:819 alim_seq/rapport.py:1121
+msgid "Measurements during the test"
+msgstr "Mesures pendant l'essai"
+
+#: alim_seq/rapport.py:869
+msgid " (cause)"
+msgstr " (en cause)"
+
+#: alim_seq/rapport.py:880
+msgid "trip"
+msgstr "déclenchement"
+
+#: alim_seq/rapport.py:885
+msgid "Zoom on the trip"
+msgstr "Zoom sur le déclenchement"
+
+#: alim_seq/rapport.py:913
+msgid ""
+"reportlab is required to generate the report PDF (pip install reportlab)."
+msgstr "reportlab requis pour générer le PDF du rapport (pip install reportlab)."
+
+#: alim_seq/rapport.py:962
+msgid "SIMULATION TEST — no real hardware driven"
+msgstr "ESSAI EN SIMULATION — aucun matériel réel piloté"
+
+#: alim_seq/rapport.py:1044
+msgid "Information"
+msgstr "Informations"
+
+#: alim_seq/rapport.py:1072
+msgid "Outcome: Completed without safety event"
+msgstr "Issue : Terminé sans événement de sécurité"
+
+#: alim_seq/rapport.py:1074
+msgid "Outcome: Interrupted by the user"
+msgstr "Issue : Interrompu par l'utilisateur"
+
+#: alim_seq/rapport.py:1076
+msgid "Outcome: SAFETY TRIP:"
+msgstr "Issue : DÉCLENCHEMENT DE SÉCURITÉ :"
+
+#: alim_seq/rapport.py:1079
+msgid "Outcome: In progress"
+msgstr "Issue : En cours"
+
+#: alim_seq/rapport.py:1095
+msgid "Measurement points:"
+msgstr "Points de mesure :"
+
+#: alim_seq/rapport.py:1096
+msgid "Configuration:"
+msgstr "Configuration :"
+
+#: alim_seq/rapport.py:1137
+msgid "No."
+msgstr "N°"
+
+#: alim_seq/rapport.py:1137 alim_seq/rapport.py:1217
+msgid "Time"
+msgstr "Temps"
+
+#: alim_seq/rapport.py:1137 alim_seq/rapport.py:1217
+msgid "Event"
+msgstr "Événement"
+
+#: alim_seq/rapport.py:1171
+msgid ""
+"“CC time” = time spent in current limiting (CC mode); “End setpoint” = "
+"voltage / current requested at end of test."
+msgstr "« Temps CC » = durée passée en limitation de courant (mode CC) ; « Consigne fin » = tension / courant demandés en fin d'essai."
+
+#: alim_seq/rapport.py:1195
+msgid "Warning threshold"
+msgstr "Seuil alerte"
+
+#: alim_seq/rapport.py:1196
+msgid "Time > warning"
+msgstr "Durée > alerte"
+
+#: alim_seq/rapport.py:1196
+msgid "Time > critical"
+msgstr "Durée > critique"
+
+#: alim_seq/rapport.py:1198
+msgid ""
+"“Excursions” = number of times the temperature crossed the warning threshold "
+"(rises); durations are cumulative over the whole test."
+msgstr "« Dépassements » = nombre de fois où la température a franchi le seuil d'alerte (montées) ; les durées sont cumulées sur la totalité de l'essai."
+
+#: alim_seq/rapport.py:1287
+msgid "ALIM_SEQ v{} — page {} / {}"
+msgstr "ALIM_SEQ v{} — page {} / {}"
+
+#: alim_seq/config.py:368
+msgid "Instrument {!r}: unknown driver {!r} (known: {})."
+msgstr "Instrument {!r} : driver {!r} inconnu (connus : {})."
+
+#: alim_seq/config.py:375
+msgid ""
+"{} temperature instruments declared: only one is supported (the "
+"'temperatures' sensors attach to the single NI module)."
+msgstr "{} instruments de température déclarés : un seul est supporté (les capteurs 'temperatures' sont rattachés à l'unique module NI)."
+
+#: alim_seq/config.py:383
+msgid "Supply {!r}: unknown model {!r} (known: {})."
+msgstr "Alimentation {!r} : modèle {!r} inconnu (connus : {})."
+
+#: alim_seq/config.py:391
+msgid "Channel {!r}: unknown supply {!r} (defined in 'supplies'?)"
+msgstr "Voie {!r} : alimentation {!r} inconnue (définie dans 'supplies' ?)"
+
+#: alim_seq/config.py:399
+msgid "Channel {!r}: channel {} out of range 1-{} (model {} of {!r})."
+msgstr "Voie {!r} : canal {} hors plage 1-{} (modèle {} de {!r})."
+
+#: alim_seq/config.py:406
+msgid "Channel {!r}: max_voltage {} V > {} V (limit {})."
+msgstr "Voie {!r} : max_voltage {} V > {} V (limite {})."
+
+#: alim_seq/config.py:409
+msgid "Channel {!r}: max_current {} A > {} A (limit {})."
+msgstr "Voie {!r} : max_current {} A > {} A (limite {})."
+
+#: alim_seq/config.py:414
+msgid ""
+"Channel {!r}: channel {} of {!r} is already assigned to channel {!r} (one "
+"physical channel = one channel only)."
+msgstr "Voie {!r} : le canal {} de {!r} est déjà affecté à la voie {!r} (un canal physique = une seule voie)."
+
+#: alim_seq/config.py:423
+msgid "Sensor {!r}: 'critical' threshold ({}) must be > 'warning' ({})"
+msgstr "Capteur {!r} : seuil 'critical' ({}) doit être > 'warning' ({})"
+
+#: alim_seq/config.py:428
+msgid "Sensor {!r}: 'ai_min' ({}) must be < 'ai_max' ({})."
+msgstr "Capteur {!r} : 'ai_min' ({}) doit être < 'ai_max' ({})."
+
+#: alim_seq/config.py:434
+msgid "Sensor {!r}: unknown required channel {!r} (in 'requires')."
+msgstr "Capteur {!r} : voie requise {!r} inconnue (dans 'requires')."
+
+#: alim_seq/config.py:446
+msgid "Sensor {!r}: invalid converter — {}"
+msgstr "Capteur {!r} : convertisseur invalide — {}"
+
+#: alim_seq/config.py:452
+msgid ""
+"Sensor {!r}: converter {!r} without disconnection guard -> set "
+"'valid_min'/'valid_max' or leave a 'fault_margin' > 0 (0 disables "
+"disconnected-sensor detection)."
+msgstr "Capteur {!r} : convertisseur {!r} sans garde-fou de débranchement -> définir 'valid_min'/'valid_max' ou laisser un 'fault_margin' > 0 (0 désactive la détection capteur débranché)."
+
+#: alim_seq/config.py:463
+msgid ""
+"Sensor {!r}: a thermocouple requires 'valid_min' AND 'valid_max' (plausible "
+"temperature band) — the only software net against a disconnected/floating-"
+"input TC."
+msgstr "Capteur {!r} : un thermocouple exige 'valid_min' ET 'valid_max' (bande de température plausible) — seul filet logiciel contre un TC débranché/entrée flottante."
+
+#: alim_seq/config.py:470
+msgid "Sensor {!r}: unknown 'ref_channel' {!r} (channel or group expected)."
+msgstr "Capteur {!r} : 'ref_channel' {!r} inconnu (voie ou groupe attendu)."
+
+#: alim_seq/config.py:475
+msgid ""
+"Sensor {!r}: 'ref_channel' set but no expected reference voltage "
+"('ref_voltage' at sensor level, or 'v_ref' in the converter)."
+msgstr "Capteur {!r} : 'ref_channel' défini mais aucune tension de référence attendue ('ref_voltage' au niveau du capteur, ou 'v_ref' dans le convertisseur)."
+
+#: alim_seq/config.py:482
+msgid "Group {!r}: the name conflicts with a channel."
+msgstr "Groupe {!r} : le nom entre en conflit avec une voie."
+
+#: alim_seq/config.py:484
+msgid "Group {!r}: only 'series' mode is supported for now."
+msgstr "Groupe {!r} : seul le mode 'series' est supporté pour l'instant."
+
+#: alim_seq/config.py:486
+msgid "Group {!r}: at least 2 member channels required."
+msgstr "Groupe {!r} : au moins 2 voies membres requises."
+
+#: alim_seq/config.py:488
+msgid "Group {!r}: duplicate member channel."
+msgstr "Groupe {!r} : voie membre dupliquée."
+
+#: alim_seq/config.py:491
+msgid "Group {!r}: unknown member channel {!r}."
+msgstr "Groupe {!r} : voie membre inconnue {!r}."
+
+#: alim_seq/config.py:494
+msgid "Group {!r}: channel {!r} already belongs to group {!r}."
+msgstr "Groupe {!r} : la voie {!r} appartient déjà au groupe {!r}."
+
+#: alim_seq/config.py:500
+msgid "Group {!r}: 'split' must be 'equal' or 'fill'."
+msgstr "Groupe {!r} : 'split' doit être 'equal' ou 'fill'."
+
+#: alim_seq/config.py:509
+msgid "Relay output {!r} ({!r}): the name conflicts with a channel or group."
+msgstr "Sortie de relais {!r} ({!r}) : le nom entre en conflit avec une voie ou un groupe."
+
+#: alim_seq/config.py:514
+msgid "Relay output {!r}: already declared by {!r}."
+msgstr "Sortie de relais {!r} : déjà déclarée par {!r}."
+
+#: alim_seq/config.py:520
+msgid "Invalid configuration:"
+msgstr "Configuration invalide :"
+
+#: alim_seq/sequencer.py:137
+msgid "Line {}: 'END' without matching 'REPEAT'."
+msgstr "Ligne {}: 'END' sans 'REPEAT' correspondant."
+
+#: alim_seq/sequencer.py:141
+msgid "Sequence too long after loop expansion (REPEAT too large)."
+msgstr "Séquence trop longue après expansion des boucles (REPEAT trop grand)."
+
+#: alim_seq/sequencer.py:146
+msgid "'REPEAT' without matching 'END'."
+msgstr "'REPEAT' sans 'END' correspondant."
+
+#: alim_seq/sequencer.py:169
+msgid "Line {}: '{}' expects at least {} argument(s) -> {!r}"
+msgstr "Ligne {}: '{}' attend au moins {} argument(s) -> {!r}"
+
+#: alim_seq/sequencer.py:177
+msgid "Line {}: unknown channel {!r}. Valid channels: {}"
+msgstr "Ligne {}: voie inconnue {!r}. Voies valides : {}"
+
+#: alim_seq/sequencer.py:195
+msgid ""
+"Line {}: RAMP [steps] is the number of steps (integer >= 2), got {!r} -> {!r}"
+msgstr "Ligne {}: RAMP [pas] est le nombre de pas (entier >= 2), reçu {!r} -> {!r}"
+
+#: alim_seq/sequencer.py:199
+msgid "Line {}: RAMP [steps] (number of steps) must be >= 2 (got {})."
+msgstr "Ligne {}: RAMP [pas] (nombre de pas) doit être >= 2 (reçu {})."
+
+#: alim_seq/sequencer.py:211
+msgid "Line {}: '{}' expects a number for {} -> {!r}"
+msgstr "Ligne {}: '{}' attend un nombre pour {} -> {!r}"
+
+#: alim_seq/sequencer.py:215
+msgid "Line {}: {} must be > 0 (got {})."
+msgstr "Ligne {}: {} doit être > 0 (reçu {})."
+
+#: alim_seq/sequencer.py:218
+msgid "Line {}: {} must be >= 0 (got {})."
+msgstr "Ligne {}: {} doit être >= 0 (reçu {})."
+
+#: alim_seq/sequencer.py:228
+msgid "Line {}: '{}' expects key=value pairs, got {!r} -> {!r}"
+msgstr "Ligne {}: '{}' attend des paires clé=valeur, reçu {!r} -> {!r}"
+
+#: alim_seq/sequencer.py:234
+msgid "Line {}: unknown key {!r} for '{}'. Valid keys: {}"
+msgstr "Ligne {}: clé inconnue {!r} pour '{}'. Clés valides : {}"
+
+#: alim_seq/sequencer.py:240
+msgid "Line {}: non-numeric value for {!r}: {!r}"
+msgstr "Ligne {}: valeur non numérique pour {!r} : {!r}"
+
+#: alim_seq/sequencer.py:249 alim_seq/sequencer.py:255
+msgid "voltage"
+msgstr "la tension"
+
+#: alim_seq/sequencer.py:251 alim_seq/sequencer.py:259
+msgid "current"
+msgstr "le courant"
+
+#: alim_seq/sequencer.py:265 alim_seq/sequencer.py:274
+#: alim_seq/sequencer.py:279
+msgid "duration"
+msgstr "la durée"
+
+#: alim_seq/sequencer.py:272
+msgid "start voltage"
+msgstr "la tension de départ"
+
+#: alim_seq/sequencer.py:273 alim_seq/sequencer.py:278
+msgid "final voltage"
+msgstr "la tension finale"
+
+#: alim_seq/sequencer.py:284
+msgid "target current"
+msgstr "le courant cible"
+
+#: alim_seq/sequencer.py:291 alim_seq/sequencer.py:302
+msgid "Line {}: invalid operator {!r}"
+msgstr "Ligne {}: opérateur invalide {!r}"
+
+#: alim_seq/sequencer.py:292 alim_seq/sequencer.py:303
+msgid "value"
+msgstr "la valeur"
+
+#: alim_seq/sequencer.py:298
+msgid "Line {}: unknown sensor {!r}. Sensors: {}"
+msgstr "Ligne {}: capteur inconnu {!r}. Capteurs : {}"
+
+#: alim_seq/sequencer.py:312
+msgid "Line {}: {}"
+msgstr "Ligne {}: {}"
+
+#: alim_seq/sequencer.py:316
+msgid "Line {}: unknown channel {!r} in expression. Valid channels: {}"
+msgstr "Ligne {}: voie inconnue {!r} dans l'expression. Voies valides : {}"
+
+#: alim_seq/sequencer.py:325
+msgid "Line {}: 'REPEAT' expects an integer -> {!r}"
+msgstr "Ligne {}: 'REPEAT' attend un entier -> {!r}"
+
+#: alim_seq/sequencer.py:327
+msgid "Line {}: 'REPEAT' must be >= 1."
+msgstr "Ligne {}: 'REPEAT' doit être >= 1."
+
+#: alim_seq/sequencer.py:332
+msgid "Line {}: unknown relay output {!r}. Outputs: {}"
+msgstr "Ligne {}: sortie de relais inconnue {!r}. Sorties : {}"
+
+#: alim_seq/sequencer.py:337
+msgid "Line {}: 'RELAY' expects ON or OFF -> {!r}"
+msgstr "Ligne {}: 'RELAY' attend ON ou OFF -> {!r}"
+
+#: alim_seq/sequencer.py:343
+msgid "Line {}: unknown command {!r} -> {!r}"
+msgstr "Ligne {}: commande inconnue {!r} -> {!r}"
+
+#: alim_seq/sequencer.py:367
+msgid "Non-numeric value for {!r}: {!r}"
+msgstr "Valeur non numérique pour {!r} : {!r}"
+
+#: alim_seq/sequencer.py:429
+msgid "A sequence is already running."
+msgstr "Une séquence est déjà en cours."
+
+#: alim_seq/sequencer.py:508
+msgid "Sequence completed."
+msgstr "Séquence terminée."
+
+#: alim_seq/sequencer.py:517 alim_seq/sequencer.py:532
+msgid "Sequence interrupted."
+msgstr "Séquence interrompue."
+
+#: alim_seq/sequencer.py:537
+msgid "Failure/interruption at line {}."
+msgstr "Échec/interruption ligne {}."
+
+#: alim_seq/sequencer.py:543
+msgid "Line error: {}"
+msgstr "Erreur ligne : {}"
+
+#: alim_seq/sequencer.py:544
+msgid "Sequence error: {}"
+msgstr "Erreur séquence : {}"
+
+#: alim_seq/sequencer.py:549
+msgid "Sequence aborted by safety."
+msgstr "Séquence avortée par la sécurité."
+
+#: main.py:27
+msgid "HMP4040 / NI power-supply sequencer"
+msgstr "Séquenceur d'alimentation HMP4040 / NI"
+
+#: main.py:30
+msgid "Configuration file (default: config.json)"
+msgstr "Fichier de configuration (défaut: config.json)"
+
+#: main.py:52
+msgid "Configuration not found: {}"
+msgstr "Configuration introuvable : {}"
+
+#: main.py:58
+msgid ""
+"Configuration error:\n"
+"{}"
+msgstr "Erreur de configuration :\n{}"
+
+#: main.py:67
+msgid ""
+"PySide6 is required for the ALIM_SEQ graphical interface.\n"
+"  Install the GUI dependencies:  pip install -r requirements-qt.txt\n"
+"  (detail: {})"
+msgstr "PySide6 est requis pour l'interface graphique d'ALIM_SEQ.\n  Installer les dépendances de l'IHM :  pip install -r requirements-qt.txt\n  (détail : {})"

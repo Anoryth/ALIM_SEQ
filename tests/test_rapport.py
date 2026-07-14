@@ -68,29 +68,29 @@ def _make_dossier(tmp_path, nom="Essai démo", issue="declenchement_securite",
 
 def test_sections_presentes(tmp_path):
     html = construire_html(_make_dossier(tmp_path))
-    for attendu in ("Rapport d'essai — ALIM_SEQ", "Synthèse",
-                    "Conclusion de l'opérateur", "Statistiques par voie",
-                    "Chronologie", "Annexe A", "Annexe B"):
+    for attendu in ("Test report — ALIM_SEQ", "Summary",
+                    "Operator conclusion", "Per-channel statistics",
+                    "Timeline", "Appendix A", "Appendix B"):
         assert attendu in html
-    assert "Points de mesure" in html
+    assert "Measurement points" in html
     assert "3 points" in html                  # 3 points de mesure + synthèse
 
 
 def test_bandeau_simulation(tmp_path):
     html = construire_html(_make_dossier(tmp_path))
-    assert "ESSAI EN SIMULATION" in html
+    assert "SIMULATION TEST" in html
 
 
 def test_issue_declenchement_en_rouge(tmp_path):
     html = construire_html(_make_dossier(tmp_path))
-    assert "DÉCLENCHEMENT DE SÉCURITÉ" in html
+    assert "SAFETY TRIP" in html
     assert "Surchauffe TS1" in html
     assert "#C62828" in html   # rouge réservé à la sécurité
 
 
 def test_conclusion_vide(tmp_path):
     html = construire_html(_make_dossier(tmp_path), conclusion="")
-    assert "(non renseignée)" in html
+    assert "(not provided)" in html
 
 
 def test_conclusion_renseignee_et_echappee(tmp_path):
@@ -156,15 +156,25 @@ def test_rapport_depuis_essai_reel(ctrl, tmp_path, monkeypatch):
     pdf = generer_rapport(dossier)
     assert pdf.exists() and pdf.stat().st_size > 10_000
     html = (dossier / "rapport.html").read_text(encoding="utf-8")
-    assert "DÉCLENCHEMENT DE SÉCURITÉ" in html
+    assert "SAFETY TRIP" in html
     assert "Surchauffe simulée" in html
 
 
 # ============================ Mission 6 — Tâche 3 ============================
 
 def test_fr():
-    assert _fr(1234.5, 1) == "1234,5"
-    assert _fr(3.14159, 2) == "3,14"
+    from alim_seq import i18n
+    # English base: decimal point.
+    i18n.set_language("en")
+    assert _fr(1234.5, 1) == "1234.5"
+    assert _fr(3.14159, 2) == "3.14"
+    # French: decimal comma.
+    i18n.set_language("fr")
+    try:
+        assert _fr(1234.5, 1) == "1234,5"
+        assert _fr(3.14159, 2) == "3,14"
+    finally:
+        i18n.set_language("en")
     assert _fr(80, 0) == "80"
     assert _fr(None) == "—"
     assert _fr(float("nan")) == "—"

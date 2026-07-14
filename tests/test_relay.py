@@ -70,7 +70,7 @@ def test_relay_labels_and_map(tmp_path):
 def test_relay_label_collision_rejected(tmp_path):
     raw = json.loads(json.dumps(_CFG))
     raw["instruments"]["RLY"]["outputs"] = ["A"]  # collision avec la voie "A"
-    with pytest.raises(ValueError, match="conflit"):
+    with pytest.raises(ValueError, match="conflicts"):
         load_config(_write(tmp_path, raw))
 
 
@@ -112,10 +112,10 @@ def test_sequence_relay_validation(tmp_path):
                           set(cfg.temperatures), relays)
     assert [a.cmd for a in acts] == ["RELAY", "RELAY"]
     # sortie inconnue
-    with pytest.raises(SequenceError, match="relais inconnue"):
+    with pytest.raises(SequenceError, match="relay output"):
         parse_sequence("RELAY NOPE ON", set(cfg.all_labels), set(cfg.temperatures), relays)
     # état invalide
-    with pytest.raises(SequenceError, match="ON ou OFF"):
+    with pytest.raises(SequenceError, match="ON or OFF"):
         parse_sequence("RELAY K1 MAYBE", set(cfg.all_labels), set(cfg.temperatures), relays)
 
 

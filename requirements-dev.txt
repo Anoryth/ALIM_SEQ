@@ -1,8 +1,8 @@
-# Dépendances de DÉVELOPPEMENT uniquement (tests). Non requises pour exécuter
-# l'application (ni en simulation, ni en matériel réel).
+# DEVELOPMENT-only dependencies (tests). Not required to run the application
+# (neither in simulation nor on real hardware).
 #
 #   pip install -r requirements-dev.txt
 #   python -m pytest
 
 pytest>=8.0
-pdoc>=14.0      # génère la doc API HTML depuis les docstrings (tools/build-apidoc.sh)
+pdoc>=14.0      # generates the HTML API doc from the docstrings (tools/build-apidoc.sh)

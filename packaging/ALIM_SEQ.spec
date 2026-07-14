@@ -90,7 +90,8 @@ datas = [
     (os.path.join(ROOT, "sequences"), "sequences"),
     (os.path.join(ROOT, "README.md"), "."),
 ] + meta_datas + rl_datas
-for _doc in ("MANUEL_UTILISATEUR.md", "MANUEL_UTILISATEUR.pdf"):
+for _doc in ("MANUEL_UTILISATEUR.md", "MANUEL_UTILISATEUR.pdf",
+             "USER_MANUAL.md", "USER_MANUAL.pdf"):
     _p = os.path.join(ROOT, "docs", _doc)
     if os.path.exists(_p):
         datas.append((_p, "docs"))
@@ -99,6 +100,16 @@ for _img in ("logo.png", "icon.ico"):
     _p = os.path.join(PKG, _img)
     if os.path.exists(_p):
         datas.append((_p, "."))
+
+# Compiled translation catalogs (regenerate with tools/build-i18n.sh before building):
+#   domain gettext .mo -> alim_seq/locale/<lang>/LC_MESSAGES/  (i18n.py resolves this)
+#   GUI Qt .qm         -> alim_seq/gui_qt/i18n/                 (main_window.py resolves this)
+import glob as _glob
+for _mo in _glob.glob(os.path.join(ROOT, "alim_seq", "locale", "*", "LC_MESSAGES", "*.mo")):
+    _rel = os.path.relpath(os.path.dirname(_mo), ROOT)
+    datas.append((_mo, _rel))
+for _qm in _glob.glob(os.path.join(ROOT, "alim_seq", "gui_qt", "i18n", "*.qm")):
+    datas.append((_qm, os.path.join("alim_seq", "gui_qt", "i18n")))
 
 icon = os.path.join(PKG, "icon.ico")
 icon = icon if os.path.exists(icon) else None

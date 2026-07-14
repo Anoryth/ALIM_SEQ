@@ -28,5 +28,5 @@ def test_create_real_psu_returns_model_class():
 
 
 def test_unknown_model_raises():
-    with pytest.raises(ValueError, match="inconnu"):
+    with pytest.raises(ValueError, match="Unknown"):
         create_psu("ACME9000", simulate=True)

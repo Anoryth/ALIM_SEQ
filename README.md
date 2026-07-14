@@ -1,103 +1,102 @@
-# Séquenceur d'alimentation — R&S HMP + acquisition National Instruments
+**English** · [Français](README.fr.md)
 
-Application Python pour **séquencer l'alimentation d'une carte électronique** en toute
-**sûreté** : pilotage de voies (R&S HMP40xx / 20xx en **SCPI**), **asservissement**
-tension → courant, mesure de **température** (module NI), **sécurité thermique**,
-enregistrement et **rapport d'essai**. IHM **Qt** (PySide6). Fonctionne en
-**simulation** (sans matériel) comme sur **matériel réel** — le même code.
+# Power-supply sequencer — R&S HMP + National Instruments acquisition
 
-> ⚠️ **Sûreté.** Ce logiciel pilote des **alimentations de puissance** : ses
-> protections sont **logicielles** et ne remplacent pas un dispositif de sûreté
-> matériel ni le jugement de l'opérateur. Fourni **sans garantie** (GPL‑3.0), **non
-> certifié**, usage **à vos propres risques**. Raccordez les instruments sur un
-> **réseau de banc isolé** (SCPI/TCPIP est sans authentification). Voir
-> [SECURITY.md](SECURITY.md).
+Python application to **sequence the power supply of an electronic board** safely:
+channel control (R&S HMP40xx / 20xx over **SCPI**), voltage → current **servo
+control**, **temperature** measurement (NI module), **thermal safety**, recording and
+**test reports**. **Qt** GUI (PySide6), **bilingual EN/FR**. Runs in **simulation**
+(no hardware) as well as on **real hardware** — the same code.
 
-## Aperçu
+> ⚠️ **Safety.** This software drives **power supplies**: its protections are
+> **software** and do not replace a hardware safety device nor the operator's
+> judgement. Provided **without warranty** (GPL‑3.0), **not certified**, use **at your
+> own risk**. Connect the instruments on an **isolated bench network** (SCPI/TCPIP has
+> no authentication). See [SECURITY.md](SECURITY.md).
 
-<p align="center"><img src="docs/img/demo.gif" alt="Démonstration : montée en température puis déclenchement de sécurité" width="840"></p>
+## Overview
 
-> **Sécurité en action** *(simulation)* — la carte chauffe sous puissance, la
-> surveillance franchit le seuil d'**alerte**, puis au **critique** la
-> **désalimentation de sécurité** se déclenche (bannière rouge) et la température
-> retombe. Aucun matériel requis.
+<p align="center"><img src="docs/img/demo.gif" alt="Demo: temperature rise then safety trip" width="840"></p>
 
-<p align="center"><img src="docs/img/01-controle.png" alt="Onglet Contrôle" width="840"></p>
+> **Safety in action** *(simulation)* — the board heats up under power, monitoring
+> crosses the **warning** threshold, then at **critical** the **safety power-down**
+> triggers (red banner) and the temperature drops. No hardware required.
 
-> Onglet **Contrôle** — voies d'alimentation et groupe série, surveillance de
-> température (seuils), **barre de sécurité permanente** (arrêt d'urgence, séquentiel
-> d'arrêt, réarmer), badge de mode et journal. *(scénario de simulation)*
+<p align="center"><img src="docs/img/01-controle.png" alt="Control tab" width="840"></p>
 
-<p align="center"><img src="docs/img/02-graphe.png" alt="Onglet Graphe" width="840"></p>
+> **Control** tab — power channels and series group, temperature monitoring
+> (thresholds), **permanent safety bar** (emergency stop, shutdown sequence, rearm),
+> mode badge and log. *(simulation scenario)*
 
-> Onglet **Graphe** — courbes temps réel commutables **°C / A / V**, seuils
-> alerte/critique, **curseur de lecture** des valeurs, repères d'événements, export
-> **PNG / CSV**.
+<p align="center"><img src="docs/img/02-graphe.png" alt="Chart tab" width="840"></p>
 
-<p align="center"><img src="docs/img/03-editeur.png" alt="Éditeur de séquence" width="840"></p>
+> **Chart** tab — real-time curves switchable between **°C / A / V**, warning/critical
+> thresholds, **read cursor** for values, event markers, **PNG / CSV** export.
 
-> Onglet **Éditeur de séquence** — coloration syntaxique, **lint en direct**
-> (✓/✗ + ligne fautive), auto‑complétion et palette de commandes cliquable.
+<p align="center"><img src="docs/img/03-editeur.png" alt="Sequence editor" width="840"></p>
 
-## Fonctionnalités
+> **Sequence editor** tab — syntax highlighting, **live lint** (✓/✗ + faulty line),
+> auto-completion and a clickable command palette.
 
-- **Voies d'alimentation** — réglage tension / limite de courant, ON/OFF, **groupes
-  en série**, rails négatifs, labels (`VCC`, `VDRAIN`…).
-- **Asservissement** (servo) — règle une voie jusqu'à un **courant cible** mesuré sur
-  une autre, à pas fixe ou **adaptatif** (sécante/Newton).
-- **Sécurité thermique** — seuils alerte/critique par capteur ; au critique,
-  **désalimentation ordonnée** (extinction douce), **coupure dure** en dernier
-  recours, **arrêt d'urgence**, état verrouillé jusqu'au réarmement.
-- **Températures** — conversion tension → °C (table, polynôme, NTC, PTC/RTD,
-  thermocouple K/J) avec **détection de capteur en défaut**.
-- **Séquences** `.seq` (une action par ligne : `SET`, `ON/OFF`, `WAIT`, `RAMP`,
-  `SERVO`, `WAIT_CURRENT/TEMP`, `RELAY`, `REPEAT`…) — éditeur intégré avec **lint en
-  direct** et auto‑complétion.
-- **Relais / actionneurs** et **couplages** simulés (tester un servo sans matériel).
-- **Traçabilité** — dossiers d'essai autonomes (CSV + config + séquence + journal),
-  **rapport PDF régénérable**, **relecture** et **comparaison** d'essais.
-- **Assistant de configuration** — simulation, scan VISA, saisie d'adresse manuelle.
-- **Parité simulation / réel** — mocks fidèles (modèle thermique, charges, couplages).
+## Features
 
-## Démarrage
+- **Power channels** — voltage / current-limit setting, ON/OFF, **series groups**,
+  negative rails, labels (`VCC`, `VDRAIN`…).
+- **Servo control** — drives one channel until a **target current** measured on
+  another is reached, with fixed or **adaptive** step (secant/Newton).
+- **Thermal safety** — warning/critical thresholds per sensor; at critical, an
+  **orderly power-down** (soft switch-off), **hard cut-off** as a last resort,
+  **emergency stop**, state locked until rearmed.
+- **Temperatures** — voltage → °C conversion (table, polynomial, NTC, PTC/RTD, K/J
+  thermocouple) with **faulty-sensor detection**.
+- **`.seq` sequences** (one action per line: `SET`, `ON/OFF`, `WAIT`, `RAMP`, `SERVO`,
+  `WAIT_CURRENT/TEMP`, `RELAY`, `REPEAT`…) — built-in editor with **live lint** and
+  auto-completion.
+- **Relays / actuators** and simulated **couplings** (test a servo without hardware).
+- **Traceability** — self-contained test folders (CSV + config + sequence + log),
+  **regenerable PDF report**, test **replay** and **comparison**.
+- **Configuration wizard** — simulation, VISA scan, manual address entry.
+- **Bilingual** — French / English, selectable in *View → Language*.
+- **Simulation / real parity** — faithful mocks (thermal model, loads, couplings).
+
+## Getting started
 
 ```bash
-pip install -r requirements-qt.txt    # IHM Qt — requise, même en simulation
-python3 main.py                        # démarre en simulation (config + séquences de démo)
+pip install -r requirements-qt.txt    # Qt GUI — required, even in simulation
+python3 main.py                        # starts in simulation (demo config + sequences)
 
-pip install -r requirements.txt        # + pilotes MATÉRIEL RÉEL (pyvisa, nidaqmx)
-python3 main.py --config config.json   # passer "simulate": false dans le JSON
+pip install -r requirements.txt        # + REAL-HARDWARE drivers (pyvisa, nidaqmx)
+python3 main.py --config config.json   # set "simulate": false in the JSON
 ```
 
-Une **configuration de démonstration** et plusieurs **séquences** sont livrées : lance
-l'app, ouvre `sequences/demo.seq`, exécute — tout se passe en simulation, sans
-matériel.
+A **demo configuration** and several **sequences** ship with the app: launch it, open
+`sequences/demo.seq`, run — everything happens in simulation, no hardware. On first
+launch the language follows the system locale (English fallback); change it under
+*View → Language*.
 
-> **Windows** : installateur `ALIM_SEQ-Setup.exe` dans les
-> [Releases](https://github.com/Anoryth/ALIM_SEQ/releases) (démarre en simulation,
-> aucune dépendance à installer).
+> **Windows**: `ALIM_SEQ-Setup.exe` installer in the
+> [Releases](https://github.com/Anoryth/ALIM_SEQ/releases) (starts in simulation, no
+> dependency to install).
 
 ## Documentation
 
-- **[Manuel utilisateur](docs/MANUEL_UTILISATEUR.md)** — usage complet (aussi dans
-  l'app : *Aide → Manuel utilisateur*, `F1`).
-- **[Architecture](docs/ARCHITECTURE.md)** — fonctionnement interne (threads,
-  sécurité, flux de données).
-- **[Guide du développeur](docs/DEVELOPPEMENT.md)** — reprendre le code : installation,
-  recettes, pièges.
-- **[Intégrer un driver d'appareil](docs/GUIDE_DRIVERS.md)** ·
-  **[Contribuer](CONTRIBUTING.md)** · **[Changelog](CHANGELOG.md)**.
+- **[User manual](docs/USER_MANUAL.md)** — full usage (also in the app:
+  *Help → User manual*, `F1`). *(French: [Manuel utilisateur](docs/MANUEL_UTILISATEUR.md))*
+- **[Architecture](docs/ARCHITECTURE.md)** — internals (threads, safety, data flow).
+- **[Developer guide](docs/DEVELOPMENT.md)** — picking up the code: setup, recipes,
+  pitfalls.
+- **[Integrate a device driver](docs/GUIDE_DRIVERS.md)** ·
+  **[Contributing](CONTRIBUTING.md)** · **[Changelog](CHANGELOG.md)**.
 
 ## Tests
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                       # toute la suite, en simulation (ni matériel, ni réseau)
+python -m pytest                       # the whole suite, in simulation (no hardware, no network)
 ```
 
-## Licence
+## License
 
-**GNU General Public License v3.0** — voir [LICENSE](LICENSE). Vous êtes libre
-d'utiliser, d'étudier, de modifier et de redistribuer ; toute version distribuée reste
-**ouverte** sous la même licence et est fournie **sans aucune garantie**.
-</content>
+**GNU General Public License v3.0** — see [LICENSE](LICENSE). You are free to use,
+study, modify and redistribute; any distributed version stays **open** under the same
+license and is provided **without any warranty**.

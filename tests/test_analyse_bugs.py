@@ -69,11 +69,11 @@ def test_b2_convertisseur_invalide_rejete_au_chargement(tmp_path):
                                   "converter": {"type": "ptc", "r_series": 1000,
                                                 "v_ref": 5, "r0": 100, "t0": 0,
                                                 "alpha": 0.0}}}
-    with pytest.raises(ValueError, match="convertisseur invalide"):
+    with pytest.raises(ValueError, match="invalid converter"):
         load_config(_write(tmp_path, raw))
     # Clé manquante : détectée aussi dès la validation, plus à la 1re mesure.
     raw["temperatures"]["T1"]["converter"] = {"type": "ntc", "r_series": 1000}
-    with pytest.raises(ValueError, match="convertisseur invalide"):
+    with pytest.raises(ValueError, match="invalid converter"):
         load_config(_write(tmp_path, raw, "c2.json"))
 
 

@@ -1,23 +1,23 @@
 # ------------------------------------------------------------
-#  Asservissement de polarisation (SERVO)
-#  Règle la tension de grille VGATE pour atteindre un courant de
-#  drain cible sur VDRAIN — deux stratégies : pas fixe puis adaptatif.
+#  Bias servo control (SERVO)
+#  Adjusts the gate voltage VGATE to reach a target drain current
+#  on VDRAIN — two strategies: fixed step then adaptive step.
 # ------------------------------------------------------------
 
-LOG Etablissement de la tension de drain
+LOG Establishing the drain voltage
 SET VDRAIN 12 2
 ON VDRAIN
 ON VGATE
 
-# Pas fixe : sûr et lisible.
+# Fixed step: safe and readable.
 LOG SERVO_LIN -> 0.5 A
 SERVO_LIN VGATE VDRAIN 0.5 step=0.05 max=8 tol=0.005
 WAIT 2
 
-# Pas adaptatif : converge plus vite vers une nouvelle cible.
+# Adaptive step: converges faster toward a new target.
 LOG SERVO_ADAPT -> 1.2 A
 SERVO_ADAPT VGATE VDRAIN 1.2 step=0.5 max=8 tol=0.01
 WAIT 2
 
 ALL_OFF
-LOG Termine
+LOG Done

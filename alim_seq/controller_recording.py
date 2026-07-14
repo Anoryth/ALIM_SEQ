@@ -1,11 +1,11 @@
-"""Enregistrement CSV et dossier d'essai — mixin du :class:`Controller`.
+"""CSV recording and test folder — :class:`Controller` mixin.
 
-Extrait de ``controller.py`` (décomposition de l'objet-dieu) : ce mixin regroupe la
-tenue du fichier ``mesures.csv`` et du dossier d'essai autonome. Il **partage l'état**
-du contrôleur (``self._rec_lock``, ``self._csv_*``, ``self._essai``, ``self.cfg``,
-``self._state_lock``/``self._set``, ``self.runner``, ``self.log``…) — c'est du pur
-déplacement de code, sans changement de comportement. ``_record_row`` reste appelé par
-la boucle de mesure du cœur.
+Extracted from ``controller.py`` (god-object decomposition): this mixin groups the
+upkeep of the ``mesures.csv`` file and the self-contained test folder. It **shares
+the controller's state** (``self._rec_lock``, ``self._csv_*``, ``self._essai``,
+``self.cfg``, ``self._state_lock``/``self._set``, ``self.runner``, ``self.log``…) —
+this is a pure code move, no behavior change. ``_record_row`` is still called by the
+core's measurement loop.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ from __future__ import annotations
 import csv
 import time
 from datetime import datetime
+
+from .i18n import _
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -20,21 +22,21 @@ from .essai import (DossierEssai, ISSUE_ARRET_UTILISATEUR, ISSUE_TERMINE)
 
 
 class RecordingMixin:
-    """Enregistrement des mesures (CSV) + dossier d'essai. Greffé sur ``Controller``."""
+    """Measurement recording (CSV) + test folder. Grafted onto ``Controller``."""
 
-    # ----------------------------------------------------- enregistrement CSV
+    # ----------------------------------------------------- CSV recording
     def start_recording(self, path: Optional[str] = None, nom: str = "",
                         operateur: str = "") -> Path:
-        """Démarre l'enregistrement des mesures et retourne le chemin du CSV.
+        """Starts recording the measurements and returns the CSV path.
 
-        Sans ``path`` explicite, crée un **dossier d'essai autonome**
-        (``logs/essais/…``) et y écrit ``mesures.csv`` : la configuration, la
-        séquence, le journal et les métadonnées sont archivés à côté. ``nom`` et
-        ``operateur`` (facultatifs) nomment l'essai. Un ``path`` explicite écrit
-        un CSV brut sans dossier (utile aux tests et exports ponctuels)."""
+        Without an explicit ``path``, creates a **self-contained test folder**
+        (``logs/essais/…``) and writes ``mesures.csv`` into it: the configuration,
+        the sequence, the log and the metadata are archived alongside. ``nom`` and
+        ``operateur`` (optional) name the test. An explicit ``path`` writes a raw
+        CSV with no folder (useful for tests and one-off exports)."""
         with self._rec_lock:
             if self._csv_writer is not None:
-                return self._csv_path  # déjà en cours
+                return self._csv_path  # already in progress
             if path is None:
                 self._essai = DossierEssai(self, nom=nom, operateur=operateur)
                 path = self._essai.mesures_path
@@ -42,7 +44,7 @@ class RecordingMixin:
             self._csv_file = self._csv_path.open("w", newline="", encoding="utf-8")
             header = ["horodatage", "t_s"]
             for name in self.cfg.temperatures:
-                # °C converti + tension NI brute (V) en regard, comme filet de sécurité.
+                # Converted °C + raw NI voltage (V) side by side, as a safety net.
                 header += [f"{name}_C", f"{name}_V"]
             for label in self.cfg.channels:
                 header += [f"{label}_Vset", f"{label}_Iset",
@@ -51,7 +53,7 @@ class RecordingMixin:
             self._csv_writer = csv.writer(self._csv_file)
             self._csv_writer.writerow(header)
             self._csv_t0 = time.monotonic()
-        self.log(f"Enregistrement démarré : {self._csv_path}")
+        self.log(_("Recording started: {}").format(self._csv_path))
         return self._csv_path
 
     def stop_recording(self) -> None:
@@ -63,9 +65,9 @@ class RecordingMixin:
             essai = self._essai
             self._essai = None
         if essai is not None:
-            essai.finalize()   # fige l'horodatage de fin + l'issue dans essai.json
+            essai.finalize()   # freezes the end timestamp + the outcome in essai.json
         if self._csv_path:
-            self.log(f"Enregistrement arrêté : {self._csv_path}")
+            self.log(_("Recording stopped: {}").format(self._csv_path))
 
     @property
     def is_recording(self) -> bool:
@@ -73,19 +75,19 @@ class RecordingMixin:
 
     @property
     def essai(self) -> Optional[DossierEssai]:
-        """Dossier d'essai en cours (None hors enregistrement ou en CSV brut)."""
+        """Current test folder (None outside a recording or in raw-CSV mode)."""
         return self._essai
 
     @property
     def recording_dossier(self) -> Optional[str]:
-        """Nom du dossier d'essai en cours, pour l'affichage IHM (None sinon)."""
+        """Name of the current test folder, for the GUI display (None otherwise)."""
         e = self._essai
         return e.path.name if e is not None else None
 
     def _runner_finished(self, ok: bool, msg: str) -> None:
-        """Intercepte la fin de séquence : met à jour l'issue de l'essai (hors
-        désalimentation de sécurité, qui n'est pas l'issue de l'essai) puis relaie
-        à l'IHM."""
+        """Intercepts the end of a sequence: updates the test outcome (except for a
+        safety power-down, which is not the test's outcome) then relays it to the
+        GUI."""
         essai = self._essai
         if essai is not None and not self.runner._safety_mode:
             essai.set_issue(ISSUE_TERMINE if ok else ISSUE_ARRET_UTILISATEUR)
@@ -95,8 +97,8 @@ class RecordingMixin:
     def _record_row(self, meas: Dict[str, Tuple[float, float]],
                     temps: Dict[str, float], volts: Dict[str, float],
                     status: str) -> None:
-        # Instantané cohérent des consignes SOUS _state_lock (elles sont mutées par
-        # d'autres threads) avant de composer la ligne CSV.
+        # Consistent snapshot of the setpoints UNDER _state_lock (they are mutated
+        # by other threads) before composing the CSV row.
         with self._state_lock:
             sp = {label: (self._set[label].set_voltage, self._set[label].set_current,
                           self._set[label].output)

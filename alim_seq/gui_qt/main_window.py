@@ -10,7 +10,7 @@ from typing import Dict, List
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .. import __version__
+from .. import __version__, i18n
 from ..config import load_config
 from ..controller import CRITICAL, FAULT, NA, OK, WARNING, Controller
 from ..sequencer import Action, SequenceError, estimate_duration, parse_sequence
@@ -30,7 +30,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self.runner = ctrl.runner
         # Statut de séquence mis à jour par les callbacks (thread séquenceur) puis
         # lu par le timer (thread GUI) -> pas d'accès widget hors thread GUI.
-        self._seq_status = ("Aucune séquence chargée.", "text.muted")
+        self._seq_status = (self.tr("No sequence loaded."), "text.muted")
         self.rows: Dict[str, ChannelRowQt] = {}
         self.temp_rows: Dict[str, TempRowQt] = {}
         self.relay_rows: Dict[str, RelayRowQt] = {}
@@ -73,7 +73,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self._confirm_emergency = self._settings.value("confirm_emergency", False, type=bool)
         self._alarm_active = False
         self._alarm_tick = 0
-        self.setWindowTitle(f"ALIM_SEQ — Séquenceur d'alimentation  v{__version__}")
+        self.setWindowTitle(self.tr("ALIM_SEQ — Power-supply sequencer  v{}").format(__version__))
         self.resize(1100, 840)
         self._build()
         geo = self._settings.value("geometry")
@@ -113,12 +113,12 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             return False
         p = Path(last)
         if not p.exists():
-            self.ctrl.log(f"Dernier profil introuvable, ignoré : {last}")
+            self.ctrl.log(self.tr("Last profile not found, ignored: {}").format(last))
             return False
         try:
             load_config(p)
         except Exception as exc:
-            self.ctrl.log(f"Dernier profil invalide, ignoré ({exc}).")
+            self.ctrl.log(self.tr("Last profile invalid, ignored ({}).").format(exc))
             return False
         self._reload_controller(p)
         return True
@@ -152,7 +152,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self.setCentralWidget(central)
         outer = QtWidgets.QVBoxLayout(central)
 
-        self.banner = QtWidgets.QLabel("Sécurité : OK")
+        self.banner = QtWidgets.QLabel(self.tr("Safety: OK"))
         self.banner.setAlignment(QtCore.Qt.AlignCenter)
         bf = self.banner.font(); bf.setPointSize(bf.pointSize() + 2); bf.setBold(True)
         self.banner.setFont(bf)
@@ -171,10 +171,10 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self.sb_conn = QtWidgets.QLabel("●")
         self.sb_cadence = QtWidgets.QLabel("")
         self.sb_power = QtWidgets.QLabel("")
-        self.sb_power.setToolTip("Puissance totale délivrée (somme des voies)")
+        self.sb_power.setToolTip(self.tr("Total power delivered (sum of channels)"))
         self.sb_rec = QtWidgets.QLabel("")
         self.sb_cfg = QtWidgets.QLabel("")
-        self.sb_cfg.setToolTip("Fichier de configuration courant")
+        self.sb_cfg.setToolTip(self.tr("Current configuration file"))
         sb.addWidget(self.sb_conn)
         sb.addWidget(self.sb_cfg)
         sb.addPermanentWidget(self.sb_power)
@@ -182,14 +182,14 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         sb.addPermanentWidget(self.sb_rec)
 
         # Journal (avec recherche ; masquable en mode compact).
-        box = QtWidgets.QGroupBox("Journal")
+        box = QtWidgets.QGroupBox(self.tr("Log"))
         self._journal_box = box
         bl = QtWidgets.QVBoxLayout(box)
         srow = QtWidgets.QHBoxLayout()
         self.log_search = QtWidgets.QLineEdit()
-        self.log_search.setPlaceholderText("Rechercher dans le journal…")
+        self.log_search.setPlaceholderText(self.tr("Search the log…"))
         self.log_search.returnPressed.connect(self._search_log)
-        find_btn = QtWidgets.QPushButton("Rechercher"); find_btn.clicked.connect(self._search_log)
+        find_btn = QtWidgets.QPushButton(self.tr("Search")); find_btn.clicked.connect(self._search_log)
         srow.addWidget(self.log_search, 1); srow.addWidget(find_btn)
         bl.addLayout(srow)
         self.log = QtWidgets.QPlainTextEdit()
@@ -228,32 +228,32 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         h = QtWidgets.QHBoxLayout(bar)
         h.setContentsMargins(6, 2, 6, 2)
 
-        self.btn_emerg = QtWidgets.QPushButton("⛔ ARRÊT D'URGENCE")
+        self.btn_emerg = QtWidgets.QPushButton(self.tr("⛔ EMERGENCY STOP"))
         self.btn_emerg.setStyleSheet(theme.style("button.emergency", self._SAFETY_PAD + " font-weight:bold;"))
         self.btn_emerg.setMinimumHeight(self._SAFETY_H)
         self.btn_emerg.setToolTip(
-            "Coupure BRUTALE et immédiate de toutes les voies (raccourci Ctrl+Maj+X).\n"
-            "Sans confirmation par défaut — voir « Affichage → Confirmer l'arrêt d'urgence ».")
+            self.tr("ABRUPT, immediate cut-off of all channels (shortcut Ctrl+Shift+X).\n"
+                    "No confirmation by default — see “View → Confirm emergency stop”."))
         self.btn_emerg.clicked.connect(self._emergency)
         h.addWidget(self.btn_emerg, 1)
 
-        self.btn_shutdown_seq = QtWidgets.QPushButton("⏹ Séquentiel d'arrêt")
+        self.btn_shutdown_seq = QtWidgets.QPushButton(self.tr("⏹ Shutdown sequence"))
         self.btn_shutdown_seq.setStyleSheet(theme.style("button.shutdown", self._SAFETY_PAD + " font-weight:bold;"))
         self.btn_shutdown_seq.setToolTip(
-            "Désalimentation ORDONNÉE (douce) : exécute la séquence d'arrêt, ou éteint "
-            "les voies dans l'ordre inverse si aucune n'est définie")
+            self.tr("ORDERLY (soft) power-down: runs the shutdown sequence, or switches "
+                    "channels off in reverse order if none is defined"))
         self.btn_shutdown_seq.clicked.connect(lambda: self.ctrl.start_shutdown_sequence(trip=False))
         h.addWidget(self.btn_shutdown_seq)
 
-        self.btn_reset = QtWidgets.QPushButton("Réarmer")
+        self.btn_reset = QtWidgets.QPushButton(self.tr("Rearm"))
         self.btn_reset.setStyleSheet(self._reset_style(False))
-        self.btn_reset.setToolTip("Lève le verrou de sécurité après un déclenchement")
+        self.btn_reset.setToolTip(self.tr("Release the safety lock after a trip"))
         self.btn_reset.clicked.connect(self._reset)
         h.addWidget(self.btn_reset)
 
-        self.btn_alloff = QtWidgets.QPushButton("Tout OFF")
+        self.btn_alloff = QtWidgets.QPushButton(self.tr("All OFF"))
         self.btn_alloff.setStyleSheet(theme.style("button.neutral", self._SAFETY_PAD))
-        self.btn_alloff.setToolTip("Éteint toutes les voies (sans rampe, mais sans déclencher la sécurité)")
+        self.btn_alloff.setToolTip(self.tr("Switch off all channels (no ramp, without tripping safety)"))
         self.btn_alloff.clicked.connect(self._all_off)
         h.addWidget(self.btn_alloff)
 
@@ -301,12 +301,12 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             self.mode_badge.setText("SIMULATION")
             self.mode_badge.setStyleSheet(
                 theme.style("badge.sim", "padding:4px 10px; border-radius:3px;"))
-            self.mode_badge.setToolTip("Aucun matériel piloté — modèle simulé.")
+            self.mode_badge.setToolTip(self.tr("No hardware driven — simulated model."))
         else:
             self.mode_badge.setText("MATÉRIEL RÉEL")
             self.mode_badge.setStyleSheet(
                 theme.style("badge.real", "padding:4px 10px; border-radius:3px;"))
-            self.mode_badge.setToolTip("Pilotage de matériel RÉEL — vérifier les limites de la config.")
+            self.mode_badge.setToolTip(self.tr("Driving REAL hardware — check the config limits."))
 
     # ------------------------------------------ tâches matérielles (hors GUI)
     def _set_hw_controls_enabled(self, on: bool) -> None:
@@ -378,69 +378,81 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         ok = result is True
         if not ok:
             QtWidgets.QMessageBox.critical(
-                self, "Connexion matériel",
-                "Impossible de se connecter au matériel :\n\n"
-                f"{self.ctrl.connect_error}\n\nL'IHM reste en mode déconnecté. "
-                "Corriger le problème puis « Reconnecter ».")
+                self, self.tr("Hardware connection"),
+                self.tr("Cannot connect to the hardware:\n\n{}\n\nThe GUI stays in "
+                        "disconnected mode. Fix the problem then “Reconnect”.").format(
+                            self.ctrl.connect_error))
 
     # ------------------------------------------------------- menu / thème
     def _build_menu(self) -> None:
         mb = self.menuBar()
-        m_file = mb.addMenu("&Fichier")
-        m_file.addAction("Ouvrir une séquence…", self._menu_open_sequence)
+        m_file = mb.addMenu(self.tr("&File"))
+        m_file.addAction(self.tr("Open a sequence…"), self._menu_open_sequence)
         m_file.addSeparator()
-        m_file.addAction("Assistant de configuration…", self._menu_config_wizard)
-        m_file.addAction("Charger une configuration…", self._menu_load_config)
-        m_file.addAction("Enregistrer la configuration sous…", self._menu_save_config_as)
+        m_file.addAction(self.tr("Configuration wizard…"), self._menu_config_wizard)
+        m_file.addAction(self.tr("Load a configuration…"), self._menu_load_config)
+        m_file.addAction(self.tr("Save configuration as…"), self._menu_save_config_as)
         m_file.addSeparator()
-        m_file.addAction("Rouvrir un essai (relecture)…", self._menu_replay_essai)
-        m_file.addAction("Comparer deux essais…", self._menu_compare_essais)
-        m_file.addAction("Générer un rapport d'essai…", self._menu_generate_report)
-        self._act_reopen = m_file.addAction("Rouvrir le dernier profil au démarrage")
+        m_file.addAction(self.tr("Reopen a test (replay)…"), self._menu_replay_essai)
+        m_file.addAction(self.tr("Compare two tests…"), self._menu_compare_essais)
+        m_file.addAction(self.tr("Generate a test report…"), self._menu_generate_report)
+        self._act_reopen = m_file.addAction(self.tr("Reopen the last profile at startup"))
         self._act_reopen.setCheckable(True)
         self._act_reopen.setChecked(self._settings.value("reopen_last_profile", False, type=bool))
         self._act_reopen.toggled.connect(
             lambda on: self._settings.setValue("reopen_last_profile", on))
         m_file.addSeparator()
-        m_file.addAction("Quitter", self.close)
+        m_file.addAction(self.tr("Quit"), self.close)
 
-        m_view = mb.addMenu("&Affichage")
-        self._act_dark = m_view.addAction("Thème sombre")
+        m_view = mb.addMenu(self.tr("&View"))
+        self._act_dark = m_view.addAction(self.tr("Dark theme"))
         self._act_dark.setCheckable(True)
         self._act_dark.setChecked(self._settings.value("dark", False, type=bool))
         self._act_dark.toggled.connect(self._toggle_theme)
-        self._act_compact = m_view.addAction("Mode compact (masquer le journal)")
+        self._act_compact = m_view.addAction(self.tr("Compact mode (hide the log)"))
         self._act_compact.setCheckable(True)
         self._act_compact.toggled.connect(self._toggle_compact)
-        self._act_alarm = m_view.addAction("Alerte sonore en sécurité critique")
+        self._act_alarm = m_view.addAction(self.tr("Sound alert on critical safety"))
         self._act_alarm.setCheckable(True)
         self._act_alarm.setChecked(self._alarm_enabled)
         self._act_alarm.toggled.connect(self._toggle_alarm)
-        self._act_confirm_emerg = m_view.addAction("Confirmer l'arrêt d'urgence")
+        self._act_confirm_emerg = m_view.addAction(self.tr("Confirm emergency stop"))
         self._act_confirm_emerg.setCheckable(True)
         self._act_confirm_emerg.setChecked(self._confirm_emergency)
         self._act_confirm_emerg.setToolTip(
-            "Si coché, l'arrêt d'urgence demande une confirmation (sinon coupure immédiate).")
+            self.tr("If checked, emergency stop asks for confirmation (otherwise immediate cut-off)."))
         self._act_confirm_emerg.toggled.connect(self._toggle_confirm_emergency)
-        self._act_auto_report = m_view.addAction("Générer le rapport en fin d'essai")
+        self._act_auto_report = m_view.addAction(self.tr("Generate the report at end of test"))
         self._act_auto_report.setCheckable(True)
         self._act_auto_report.setChecked(
             self._settings.value("auto_report", True, type=bool))
         self._act_auto_report.setToolTip(
-            "En fin d'enregistrement, proposer la conclusion puis générer le rapport "
-            "PDF. Le rapport est TOUJOURS généré automatiquement sur déclenchement "
-            "de sécurité.")
+            self.tr("At end of recording, prompt for the conclusion then generate the "
+                    "PDF report. The report is ALWAYS generated automatically on a safety "
+                    "trip."))
         self._act_auto_report.toggled.connect(
             lambda on: self._settings.setValue("auto_report", on))
 
-        m_help = mb.addMenu("&Aide")
-        act_manual = m_help.addAction("Manuel utilisateur", self._show_manual)
+        m_view.addSeparator()
+        m_lang = m_view.addMenu(self.tr("Language"))
+        self._lang_group = QtGui.QActionGroup(self)
+        self._lang_group.setExclusive(True)
+        current = self._settings.value("ui/language", "", type=str)
+        for code, label in SUPPORTED_LANGUAGES.items():
+            act = m_lang.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(code == current)
+            act.triggered.connect(lambda _checked=False, c=code: self._set_language(c))
+            self._lang_group.addAction(act)
+
+        m_help = mb.addMenu(self.tr("&Help"))
+        act_manual = m_help.addAction(self.tr("User manual"), self._show_manual)
         act_manual.setShortcut("F1")
-        m_help.addAction("Raccourcis clavier", self._show_shortcuts)
-        m_help.addAction("Référence des commandes de séquence", self._show_seq_reference)
-        m_help.addAction("Où sont mes fichiers ?", self._menu_open_essais_dir)
+        m_help.addAction(self.tr("Keyboard shortcuts"), self._show_shortcuts)
+        m_help.addAction(self.tr("Sequence command reference"), self._show_seq_reference)
+        m_help.addAction(self.tr("Where are my files?"), self._menu_open_essais_dir)
         m_help.addSeparator()
-        m_help.addAction("À propos", self._about)
+        m_help.addAction(self.tr("About"), self._about)
 
     def _apply_theme(self, dark: bool) -> None:
         theme.apply_theme(dark)
@@ -449,6 +461,23 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self._settings.setValue("dark", dark)
         self._apply_theme(dark)
         self.restyle()
+
+    def _set_language(self, code: str) -> None:
+        """Persist the chosen UI language and offer to restart to apply it.
+
+        The GUI is built imperatively (no retranslateUi), so a restart is the
+        robust way to re-render every string in the new language."""
+        if code == self._settings.value("ui/language", "", type=str):
+            return
+        self._settings.setValue("ui/language", code)
+        ans = QtWidgets.QMessageBox.question(
+            self, self.tr("Language"),
+            self.tr("The language change will take effect after restarting "
+                    "ALIM_SEQ.\n\nQuit now?"),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No)
+        if ans == QtWidgets.QMessageBox.Yes:
+            self.close()
 
     def restyle(self) -> None:
         """Ré-applique tous les styles « statiques » (posés une seule fois à la
@@ -536,7 +565,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
     def _menu_load_config(self) -> None:
         if self.runner.is_running:
-            QtWidgets.QMessageBox.information(self, "Profil", "Arrêter la séquence d'abord.")
+            QtWidgets.QMessageBox.information(self, self.tr("Profile"), self.tr("Stop the sequence first."))
             return
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Charger une configuration (profil)", self._dialog_dir(),
@@ -550,7 +579,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             return
         if QtWidgets.QMessageBox.question(
                 self, "Charger le profil",
-                f"Basculer sur ce profil et recharger le matériel ?\n\n{path}"
+                self.tr("Switch to this profile and reload the hardware?\n\n{}").format(path)
         ) != QtWidgets.QMessageBox.Yes:
             return
         # Modèle document : on BASCULE sur le fichier choisi (config.json n'est
@@ -574,59 +603,68 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self._settings.setValue("last_profile", str(self._cfg_path))
         self._remember_dir(path)
         self._update_cfg_labels()
-        self.cfg_status.setText(f"✓ Enregistré dans {self._cfg_path.name}.")
+        self.cfg_status.setText(self.tr("✓ Saved to {}.").format(self._cfg_path.name))
         self.cfg_status.setStyleSheet(theme.style("text.ok"))
-        self.ctrl.log(f"Configuration enregistrée sous : {self._cfg_path}")
+        self.ctrl.log(self.tr("Configuration saved as: {}").format(self._cfg_path))
 
     def _about(self) -> None:
-        mode = "SIMULATION" if self.ctrl.cfg.simulate else "MATÉRIEL RÉEL"
+        mode = self.tr("SIMULATION") if self.ctrl.cfg.simulate else self.tr("REAL HARDWARE")
         log_path = Path("logs/alim_seq.log").resolve()
         QtWidgets.QMessageBox.about(
-            self, "À propos d'ALIM_SEQ",
-            f"<b>ALIM_SEQ</b> — Séquenceur d'alimentation v{__version__}<br><br>"
-            "Pilotage R&S HMP (4040/4030/2030/2020) + acquisition NI.<br>"
-            "Séquences, asservissement, surveillance thermique et sécurité.<br>"
-            "Interface Qt (PySide6).<br><br>"
-            f"<b>Mode :</b> {mode}<br>"
-            f"<b>Configuration :</b> {self._cfg_path}<br>"
-            f"<b>Journal :</b> {log_path}<br><br>"
-            "<b>Dossiers d'essai :</b> chaque enregistrement crée "
-            "<code>logs/essais/AAAAMMJJ_HHMMSS[_&lt;nom&gt;]/</code> (mesures, "
-            "config, séquence, journal, métadonnées) d'où le "
-            "<b>rapport d'essai PDF</b> se régénère à tout moment "
-            "(<i>Fichier → Générer un rapport d'essai…</i>). Le rapport n'émet aucun "
-            "verdict de conformité : la conclusion est celle de l'opérateur.<br><br>"
-            "<i>Usage laboratoire — vérifier les limites de la configuration avant "
-            "tout essai sur matériel réel.</i>")
+            self, self.tr("About ALIM_SEQ"),
+            self.tr(
+                "<b>ALIM_SEQ</b> — Power-supply sequencer v{version}<br><br>"
+                "R&S HMP (4040/4030/2030/2020) control + NI acquisition.<br>"
+                "Sequences, servo control, thermal monitoring and safety.<br>"
+                "Qt interface (PySide6).<br><br>"
+                "<b>Mode:</b> {mode}<br>"
+                "<b>Configuration:</b> {cfg}<br>"
+                "<b>Log:</b> {log}<br><br>"
+                "<b>Test folders:</b> each recording creates "
+                "<code>logs/essais/YYYYMMDD_HHMMSS[_&lt;name&gt;]/</code> (measurements, "
+                "config, sequence, log, metadata) from which the "
+                "<b>PDF test report</b> can be regenerated at any time "
+                "(<i>File → Generate a test report…</i>). The report issues no "
+                "compliance verdict: the conclusion is the operator's.<br><br>"
+                "<i>Laboratory use — check the configuration limits before "
+                "any test on real hardware.</i>").format(
+                    version=__version__, mode=mode, cfg=self._cfg_path, log=log_path))
 
     def _show_shortcuts(self) -> None:
         QtWidgets.QMessageBox.information(
-            self, "Raccourcis clavier",
+            self, self.tr("Keyboard shortcuts"),
             "<table cellpadding='4'>"
-            "<tr><td><b>Ctrl+Maj+X</b></td><td>Arrêt d'urgence</td></tr>"
-            "<tr><td><b>Ctrl+S</b></td><td>Enregistrer la séquence</td></tr>"
-            "<tr><td><b>Ctrl+O</b></td><td>Ouvrir une séquence</td></tr>"
-            "<tr><td><b>F5</b></td><td>Vérifier la séquence</td></tr>"
-            "<tr><td><b>Ctrl+Entrée</b></td><td>Charger et exécuter la séquence</td></tr>"
-            "<tr><td><b>Ctrl+R</b></td><td>Démarrer/arrêter l'enregistrement</td></tr>"
-            "<tr><td><b>Ctrl+M</b></td><td>Poser un marqueur opérateur</td></tr>"
+            f"<tr><td><b>Ctrl+Shift+X</b></td><td>{self.tr('Emergency stop')}</td></tr>"
+            f"<tr><td><b>Ctrl+S</b></td><td>{self.tr('Save the sequence')}</td></tr>"
+            f"<tr><td><b>Ctrl+O</b></td><td>{self.tr('Open a sequence')}</td></tr>"
+            f"<tr><td><b>F5</b></td><td>{self.tr('Check the sequence')}</td></tr>"
+            f"<tr><td><b>Ctrl+Enter</b></td><td>{self.tr('Load and run the sequence')}</td></tr>"
+            f"<tr><td><b>Ctrl+R</b></td><td>{self.tr('Start/stop recording')}</td></tr>"
+            f"<tr><td><b>Ctrl+M</b></td><td>{self.tr('Place an operator marker')}</td></tr>"
             "</table>")
 
     def _manual_path(self):
-        """Chemin du manuel utilisateur : bundle PyInstaller (_MEIPASS/docs) ou
-        arborescence source (racine/docs). None si introuvable."""
+        """Path to the user manual, in the current language when available:
+        PyInstaller bundle (_MEIPASS/docs) or source tree (root/docs). The English
+        manual is USER_MANUAL.md, the French one MANUEL_UTILISATEUR.md; falls back to
+        the other language, then None if neither is found."""
         from pathlib import Path
-        cands = []
+        # Preferred filename first (current language), then the other as fallback.
+        names = (["USER_MANUAL.md", "MANUEL_UTILISATEUR.md"]
+                 if i18n.current_language() != "fr"
+                 else ["MANUEL_UTILISATEUR.md", "USER_MANUAL.md"])
+        roots = []
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
-            cands.append(Path(meipass) / "docs" / "MANUEL_UTILISATEUR.md")
-        cands.append(Path(__file__).resolve().parents[2] / "docs" / "MANUEL_UTILISATEUR.md")
+            roots.append(Path(meipass) / "docs")
+        roots.append(Path(__file__).resolve().parents[2] / "docs")
+        cands = [root / name for name in names for root in roots]
         return next((p for p in cands if p.exists()), None)
 
     def _show_manual(self) -> None:
         md_path = self._manual_path()
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowTitle("Manuel utilisateur")
+        dlg.setWindowTitle(self.tr("User manual"))
         dlg.resize(860, 720)
         lay = QtWidgets.QVBoxLayout(dlg)
         browser = QtWidgets.QTextBrowser()
@@ -640,12 +678,12 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                     text = text[end + 4:]
             browser.setMarkdown(text)
         else:
-            browser.setHtml("<p>Manuel introuvable dans cette installation.</p>")
+            browser.setHtml(f"<p>{self.tr('Manual not found in this installation.')}</p>")
         lay.addWidget(browser)
         bar = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
         pdf = md_path.with_suffix(".pdf") if md_path is not None else None
         if pdf is not None and pdf.exists():
-            b = bar.addButton("Ouvrir le PDF", QtWidgets.QDialogButtonBox.ActionRole)
+            b = bar.addButton(self.tr("Open the PDF"), QtWidgets.QDialogButtonBox.ActionRole)
             b.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(
                 QtCore.QUrl.fromLocalFile(str(pdf))))
         bar.rejected.connect(dlg.reject)
@@ -655,7 +693,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
     def _show_seq_reference(self) -> None:
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowTitle("Référence des commandes de séquence")
+        dlg.setWindowTitle(self.tr("Sequence command reference"))
         dlg.resize(560, 620)
         lay = QtWidgets.QVBoxLayout(dlg)
         browser = QtWidgets.QTextBrowser()
@@ -673,16 +711,16 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         while self.tabs.count():
             w = self.tabs.widget(0); self.tabs.removeTab(0); w.deleteLater()
         self.rows.clear(); self.temp_rows.clear(); self.relay_rows.clear(); self.plot = None
-        self.tabs.addTab(self._build_control_tab(), "🎛  Contrôle")
-        self.tabs.addTab(self._build_config_tab(), "⚙  Configuration")
-        self.tabs.addTab(self._build_seq_editor_tab(), "📝  Éditeur de séquence")
+        self.tabs.addTab(self._build_control_tab(), self.tr("🎛  Control"))
+        self.tabs.addTab(self._build_config_tab(), self.tr("⚙  Configuration"))
+        self.tabs.addTab(self._build_seq_editor_tab(), self.tr("📝  Sequence editor"))
         # Le graphe trace températures ET tensions/courants par voie : on l'affiche
         # dès qu'il y a des voies (donc quasi toujours), même sans capteur de température.
         if self.ctrl.cfg.channels or self.ctrl.cfg.temperatures:
-            self.tabs.addTab(self._build_plot_tab(), "📈  Graphe")
+            self.tabs.addTab(self._build_plot_tab(), self.tr("📈  Chart"))
         # Réglage à chaud de la simulation (mode simulation uniquement).
         if self.ctrl.cfg.simulate:
-            self.tabs.addTab(self._build_sim_tab(), "🧪  Simulation")
+            self.tabs.addTab(self._build_sim_tab(), self.tr("🧪  Simulation"))
 
     def _build_plot_tab(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget(); l = QtWidgets.QVBoxLayout(w)
@@ -696,11 +734,11 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         qty = QtWidgets.QComboBox()
         # « Températures » n'est proposé que si des capteurs sont configurés.
         if self.ctrl.cfg.temperatures:
-            qty.addItem("Températures (°C)", "temp")
+            qty.addItem(self.tr("Temperatures (°C)"), "temp")
         qty.addItem("Courants (A)", "current")
         qty.addItem("Tensions (V)", "voltage")
-        qty.setToolTip("Grandeur tracée. Survoler le graphe pour lire les valeurs ; "
-                       "cliquer un nom de courbe dans la légende la masque/affiche.")
+        qty.setToolTip(self.tr("Plotted quantity. Hover the chart to read values; "
+                               "click a curve name in the legend to hide/show it."))
         qty.currentIndexChanged.connect(lambda i: self.plot.set_mode(qty.itemData(i)))
         # Synchronise le mode initial du graphe avec le 1er élément (sans capteur,
         # c'est « Courants » : le mode 'temp' n'aurait rien à tracer).
@@ -720,7 +758,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         ctl.addWidget(export)
         export_csv = QtWidgets.QPushButton("📄 CSV"); export_csv.clicked.connect(self._export_plot_csv)
         ctl.addWidget(export_csv)
-        ctl.addWidget(QtWidgets.QLabel("Fenêtre :"))
+        ctl.addWidget(QtWidgets.QLabel(self.tr("Window:")))
         win_combo = QtWidgets.QComboBox()
         for s in ("60 s", "120 s", "300 s", "600 s"):
             win_combo.addItem(s)
@@ -744,20 +782,20 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         if not path.lower().endswith(".png"):
             path += ".png"
         if self.plot.grab().save(path):
-            self.ctrl.log(f"Graphe exporté : {path}")
+            self.ctrl.log(self.tr("Chart exported: {}").format(path))
         else:
             QtWidgets.QMessageBox.warning(self, "Export", "Échec de l'enregistrement du PNG.")
 
     def _export_plot_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Exporter les données du graphe", "temperatures.csv", "CSV (*.csv)")
+            self, self.tr("Export chart data"), "temperatures.csv", "CSV (*.csv)")
         if not path:
             return
         if not path.lower().endswith(".csv"):
             path += ".csv"
         try:
             self.plot.export_csv(path)
-            self.ctrl.log(f"Données du graphe exportées : {path}")
+            self.ctrl.log(self.tr("Chart data exported: {}").format(path))
         except OSError as exc:
             QtWidgets.QMessageBox.warning(self, "Export CSV", str(exc))
 
@@ -769,7 +807,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
     _ALIGN = {"l": QtCore.Qt.AlignLeft, "c": QtCore.Qt.AlignCenter, "r": QtCore.Qt.AlignRight}
 
     def _setup_grid(self, grid: QtWidgets.QGridLayout, last_col: int) -> None:
-        for col, h in enumerate(ChannelRowQt.HEADERS):
+        for col, h in enumerate(ChannelRowQt.headers()):
             lab = QtWidgets.QLabel(f"<i>{h}</i>")
             lab.setAlignment(self._ALIGN[self._HALIGN[col]] | QtCore.Qt.AlignVCenter)
             grid.addWidget(lab, 0, col)
@@ -797,7 +835,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
         # Groupes série
         if self.ctrl.cfg.groups:
-            grp_box = QtWidgets.QGroupBox("Voies en série (tension = somme)")
+            grp_box = QtWidgets.QGroupBox(self.tr("Series channels (voltage = sum)"))
             gg = QtWidgets.QGridLayout(grp_box)
             self._setup_grid(gg, last_col=8)
             for r, (gname, g) in enumerate(self.ctrl.cfg.groups.items(), start=1):
@@ -807,7 +845,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
         # Températures
         if self.ctrl.cfg.temperatures:
-            tbox = QtWidgets.QGroupBox("Températures")
+            tbox = QtWidgets.QGroupBox(self.tr("Temperatures"))
             tg = QtWidgets.QGridLayout(tbox)
             tg.setHorizontalSpacing(18)
             tg.setColumnMinimumWidth(0, 100)   # nom du capteur (affiché en entier)
@@ -822,7 +860,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             rlbox = QtWidgets.QGroupBox("Relais")
             rlg = QtWidgets.QGridLayout(rlbox)
             rlg.setHorizontalSpacing(18)
-            for col, h in enumerate(RelayRowQt.HEADERS):
+            for col, h in enumerate(RelayRowQt.headers()):
                 if h:
                     lab = QtWidgets.QLabel(h)
                     fh = lab.font(); fh.setBold(True); lab.setFont(fh)
@@ -834,51 +872,51 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             v.addWidget(rlbox)
 
         # Séquence
-        sbox = QtWidgets.QGroupBox("Séquence")
+        sbox = QtWidgets.QGroupBox(self.tr("Sequence"))
         sl = QtWidgets.QGridLayout(sbox)
-        sl.addWidget(QtWidgets.QLabel("Fichier :"), 0, 0)
+        sl.addWidget(QtWidgets.QLabel(self.tr("File:")), 0, 0)
         last_seq = self._settings.value("last_seq", "", type=str)
         default_seq = last_seq if (last_seq and Path(last_seq).exists()) else "sequences/demo.seq"
         self.seq_path = QtWidgets.QLineEdit(default_seq)
         sl.addWidget(self.seq_path, 0, 1)
-        browse = QtWidgets.QPushButton("Parcourir…"); browse.clicked.connect(self._browse)
+        browse = QtWidgets.QPushButton(self.tr("Browse…")); browse.clicked.connect(self._browse)
         sl.addWidget(browse, 0, 2)
-        load = QtWidgets.QPushButton("Charger/Vérifier"); load.clicked.connect(self._load)
+        load = QtWidgets.QPushButton(self.tr("Load/Check")); load.clicked.connect(self._load)
         sl.addWidget(load, 0, 3)
         # Séquence d'arrêt (optionnelle : vide = extinction auto en ordre inverse).
-        sl.addWidget(QtWidgets.QLabel("Séq. d'arrêt :"), 1, 0)
+        sl.addWidget(QtWidgets.QLabel(self.tr("Shutdown seq.:")), 1, 0)
         self.shutdown_path = QtWidgets.QLineEdit(self.ctrl.shutdown_path or "")
         self.shutdown_path.textChanged.connect(
             lambda t: self.ctrl.set_shutdown_sequence(t.strip() or None, log=False))
         sl.addWidget(self.shutdown_path, 1, 1)
-        browse_sd = QtWidgets.QPushButton("Parcourir…"); browse_sd.clicked.connect(self._browse_shutdown)
+        browse_sd = QtWidgets.QPushButton(self.tr("Browse…")); browse_sd.clicked.connect(self._browse_shutdown)
         sl.addWidget(browse_sd, 1, 2)
-        verify_sd = QtWidgets.QPushButton("Vérifier"); verify_sd.clicked.connect(self._verify_shutdown)
+        verify_sd = QtWidgets.QPushButton(self.tr("Check")); verify_sd.clicked.connect(self._verify_shutdown)
         sl.addWidget(verify_sd, 1, 3)
-        hint = QtWidgets.QLabel("(vide = extinction automatique des voies dans l'ordre inverse)")
+        hint = QtWidgets.QLabel(self.tr("(empty = automatic channel power-off in reverse order)"))
         hint.setStyleSheet(theme.style("text.muted", "font-size:11px;"))
         self._seq_hint = hint
         sl.addWidget(hint, 2, 0, 1, 4)
-        self.btn_start = QtWidgets.QPushButton("▶ Démarrer la séquence")
+        self.btn_start = QtWidgets.QPushButton(self.tr("▶ Start the sequence"))
         self.btn_start.setStyleSheet(theme.style("button.start", "font-weight:bold;"))
-        self.btn_start.setToolTip("Charge le fichier ci-dessus et l'exécute (Ctrl+Entrée depuis l'éditeur)")
+        self.btn_start.setToolTip(self.tr("Loads the file above and runs it (Ctrl+Enter from the editor)"))
         self.btn_start.clicked.connect(lambda: self._start_sequence())
         sl.addWidget(self.btn_start, 3, 0, 1, 4)
-        self.btn_pause = QtWidgets.QPushButton("⏸ Pause")
+        self.btn_pause = QtWidgets.QPushButton(self.tr("⏸ Pause"))
         self.btn_pause.setEnabled(False)
-        self.btn_pause.setToolTip("Suspend/reprend la séquence (gèle aussi les WAIT)")
+        self.btn_pause.setToolTip(self.tr("Suspend/resume the sequence (also freezes WAITs)"))
         self.btn_pause.clicked.connect(self._toggle_pause)
         sl.addWidget(self.btn_pause, 4, 0, 1, 2)
         # Pas-à-pas : case + bouton « Étape suivante » (actif seulement si une
         # séquence tourne en mode pas-à-pas).
-        self.chk_step = QtWidgets.QCheckBox("Pas-à-pas")
-        self.chk_step.setToolTip("Exécute la séquence action par action (chaque action "
-                                 "attend « Étape suivante »).")
+        self.chk_step = QtWidgets.QCheckBox(self.tr("Step-by-step"))
+        self.chk_step.setToolTip(self.tr("Runs the sequence action by action (each action "
+                                         "waits for “Next step”)."))
         self.chk_step.toggled.connect(self._toggle_step_mode)
         sl.addWidget(self.chk_step, 4, 2)
-        self.btn_step_next = QtWidgets.QPushButton("▶| Étape suivante")
+        self.btn_step_next = QtWidgets.QPushButton(self.tr("▶| Next step"))
         self.btn_step_next.setEnabled(False)
-        self.btn_step_next.setToolTip("Autorise l'action suivante en mode pas-à-pas")
+        self.btn_step_next.setToolTip(self.tr("Allows the next action in step-by-step mode"))
         self.btn_step_next.clicked.connect(lambda: self.runner.step_once())
         sl.addWidget(self.btn_step_next, 4, 3)
         # Progression : barre k/n + temps restant estimé.
@@ -888,25 +926,25 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self.seq_remaining = QtWidgets.QLabel("")
         self.seq_remaining.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         sl.addWidget(self.seq_remaining, 5, 3)
-        self.seq_status = QtWidgets.QLabel("Aucune séquence chargée.")
+        self.seq_status = QtWidgets.QLabel(self.tr("No sequence loaded."))
         sl.addWidget(self.seq_status, 6, 0, 1, 4)
         v.addWidget(sbox)
 
         # Enregistrement
-        rbox = QtWidgets.QGroupBox("Enregistrement des mesures")
+        rbox = QtWidgets.QGroupBox(self.tr("Measurement recording"))
         rl = QtWidgets.QHBoxLayout(rbox)
-        self.btn_rec = QtWidgets.QPushButton("● Démarrer l'enregistrement")
+        self.btn_rec = QtWidgets.QPushButton(self.tr("● Start recording"))
         self.btn_rec.clicked.connect(self._toggle_record)
         rl.addWidget(self.btn_rec)
-        self.auto_rec = QtWidgets.QCheckBox("Enregistrer pendant la séquence")
+        self.auto_rec = QtWidgets.QCheckBox(self.tr("Record during the sequence"))
         self.auto_rec.setChecked(self._settings.value("auto_rec", True, type=bool))
         self.auto_rec.toggled.connect(lambda on: self._settings.setValue("auto_rec", on))
         rl.addWidget(self.auto_rec)
         # Marqueur opérateur : horodate une note dans le journal (reprise comme repère
         # sur le graphe live ET comme badge numéroté du rapport) — « c'est ici que… ».
-        self.btn_marker = QtWidgets.QPushButton("📌 Marqueur")
-        self.btn_marker.setToolTip("Poser un repère horodaté (note) — Ctrl+M. "
-                                   "Apparaît sur le graphe et dans le rapport d'essai.")
+        self.btn_marker = QtWidgets.QPushButton(self.tr("📌 Marker"))
+        self.btn_marker.setToolTip(self.tr("Place a timestamped marker (note) — Ctrl+M. "
+                                           "Appears on the chart and in the test report."))
         self.btn_marker.clicked.connect(self._add_marker)
         rl.addWidget(self.btn_marker)
         rl.addStretch(1)
@@ -916,8 +954,8 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         # d'urgence, séquentiel d'arrêt, réarmer, tout OFF) sont dans la barre de
         # sécurité permanente, au-dessus des onglets.
         ebox = QtWidgets.QHBoxLayout()
-        self.btn_reconnect = QtWidgets.QPushButton("Reconnecter")
-        self.btn_reconnect.setToolTip("Reconnecte le matériel (VISA / NI-DAQmx) après une perte de communication")
+        self.btn_reconnect = QtWidgets.QPushButton(self.tr("Reconnect"))
+        self.btn_reconnect.setToolTip(self.tr("Reconnect the hardware (VISA / NI-DAQmx) after a communication loss"))
         self.btn_reconnect.clicked.connect(self._reconnect)
         ebox.addWidget(self.btn_reconnect)
         ebox.addStretch(1)
@@ -928,7 +966,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
     # ------------------------------------------------------------- actions
     def _browse(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Choisir une séquence", self._dialog_dir(), "Séquence (*.seq *.txt);;Tous (*)")
+            self, self.tr("Choose a sequence"), self._dialog_dir(), self.tr("Sequence (*.seq *.txt);;All (*)"))
         if path:
             self.seq_path.setText(path)
             self._remember_dir(path)
@@ -936,7 +974,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
     def _load(self) -> bool:
         path = Path(self.seq_path.text())
         if not path.exists():
-            QtWidgets.QMessageBox.critical(self, "Fichier introuvable", str(path))
+            QtWidgets.QMessageBox.critical(self, self.tr("File not found"), str(path))
             return False
         try:
             text = path.read_text(encoding="utf-8")
@@ -944,17 +982,17 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                                            set(self.ctrl.cfg.temperatures),
                                            set(self.ctrl.cfg.relay_labels))
         except (SequenceError, OSError) as exc:
-            QtWidgets.QMessageBox.critical(self, "Séquence invalide", str(exc))
-            self._seq_status = ("Séquence invalide.", "text.error")
+            QtWidgets.QMessageBox.critical(self, self.tr("Invalid sequence"), str(exc))
+            self._seq_status = (self.tr("Invalid sequence."), "text.error")
             return False
         self._seq_text = text
-        self._seq_status = (f"{len(self._actions)} action(s) depuis {path.name}.", "text.ok")
+        self._seq_status = (self.tr("{} action(s) from {}.").format(len(self._actions), path.name), "text.ok")
         return True
 
     def _browse_shutdown(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Choisir une séquence d'arrêt", self._dialog_dir(),
-            "Séquence (*.seq *.txt);;Tous (*)")
+            self, self.tr("Choose a shutdown sequence"), self._dialog_dir(),
+            self.tr("Sequence (*.seq *.txt);;All (*)"))
         if path:
             self.shutdown_path.setText(path)
             self._remember_dir(path)
@@ -964,39 +1002,39 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         if not p:
             self.ctrl.set_shutdown_sequence(None)
             QtWidgets.QMessageBox.information(
-                self, "Séquentiel d'arrêt",
-                "Vide : extinction automatique des voies dans l'ordre inverse.")
+                self, self.tr("Shutdown sequence"),
+                self.tr("Empty: automatic channel power-off in reverse order."))
             return
         path = Path(p)
         if not path.exists():
-            QtWidgets.QMessageBox.critical(self, "Fichier introuvable", str(path))
+            QtWidgets.QMessageBox.critical(self, self.tr("File not found"), str(path))
             return
         try:
             parse_sequence(path.read_text(encoding="utf-8"),
                            set(self.ctrl.cfg.all_labels), set(self.ctrl.cfg.temperatures),
                            set(self.ctrl.cfg.relay_labels))
         except (SequenceError, OSError) as exc:
-            QtWidgets.QMessageBox.critical(self, "Séquentiel d'arrêt invalide", str(exc))
+            QtWidgets.QMessageBox.critical(self, self.tr("Invalid shutdown sequence"), str(exc))
             return
         self.ctrl.set_shutdown_sequence(p)
-        QtWidgets.QMessageBox.information(self, "Séquentiel d'arrêt",
-                                          f"Fichier valide : {path.name}")
+        QtWidgets.QMessageBox.information(self, self.tr("Shutdown sequence"),
+                                          self.tr("Valid file: {}").format(path.name))
 
     def _start_sequence(self, from_editor: bool = False) -> None:
         if self.runner.is_running:
-            QtWidgets.QMessageBox.information(self, "Séquence", "Déjà en cours.")
+            QtWidgets.QMessageBox.information(self, self.tr("Sequence"), self.tr("Already running."))
             return
         # Matériel non connecté (typiquement en mode réel sans banc branché) : refuser
         # AVANT tout, sinon la séquence échoue voie par voie et un enregistrement
         # aurait déjà été ouvert pour rien.
         if not self.ctrl.connected or self.ctrl.comm_lost:
             QtWidgets.QMessageBox.warning(
-                self, "Matériel non connecté",
-                "Le matériel n'est pas connecté : impossible de lancer une séquence.\n\n"
-                "Vérifier la liaison (VISA / NI-DAQmx) puis « Reconnecter ».")
+                self, self.tr("Hardware not connected"),
+                self.tr("The hardware is not connected: cannot start a sequence.\n\n"
+                        "Check the link (VISA / NI-DAQmx) then “Reconnect”."))
             return
         if self.ctrl.tripped:
-            QtWidgets.QMessageBox.warning(self, "Sécurité", "Réarmer la sécurité avant de démarrer.")
+            QtWidgets.QMessageBox.warning(self, self.tr("Safety"), self.tr("Rearm the safety before starting."))
             return
         if not self._actions and not self._load():
             return
@@ -1013,42 +1051,42 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         # Sans confirmation par défaut (coup de poing). Dialogue seulement si
         # l'option « Confirmer l'arrêt d'urgence » est activée.
         if self._confirm_emergency and QtWidgets.QMessageBox.question(
-                self, "Arrêt d'urgence",
-                "Coupure BRUTALE et immédiate de toutes les voies.\nConfirmer ?"
+                self, self.tr("Emergency stop"),
+                self.tr("ABRUPT, immediate cut-off of all channels.\nConfirm?")
         ) != QtWidgets.QMessageBox.Yes:
             return
-        self.ctrl.emergency_stop("ARRÊT D'URGENCE (opérateur)")
+        self.ctrl.emergency_stop(self.tr("EMERGENCY STOP (operator)"))
 
     def _reset(self) -> None:
         if self.runner.is_running:
-            QtWidgets.QMessageBox.information(self, "Réarmement", "Arrêter la séquence d'abord.")
+            QtWidgets.QMessageBox.information(self, self.tr("Rearm"), self.tr("Stop the sequence first."))
             return
         self.ctrl.reset_safety()
 
     def _reconnect(self) -> None:
         if self.runner.is_running:
-            QtWidgets.QMessageBox.information(self, "Reconnexion", "Arrêter la séquence d'abord.")
+            QtWidgets.QMessageBox.information(self, self.tr("Reconnection"), self.tr("Stop the sequence first."))
             return
-        self.btn_reconnect.setText("Reconnexion…")
+        self.btn_reconnect.setText(self.tr("Reconnecting…"))
         self._connecting = True
 
         def done(result):
-            self.btn_reconnect.setText("Reconnecter")
+            self.btn_reconnect.setText(self.tr("Reconnect"))
             self._connecting = False
             if result is True:
-                QtWidgets.QMessageBox.information(self, "Reconnexion", "Matériel reconnecté.")
+                QtWidgets.QMessageBox.information(self, self.tr("Reconnection"), self.tr("Hardware reconnected."))
             else:
-                QtWidgets.QMessageBox.critical(self, "Reconnexion",
-                                               "Échec :\n\n" + self.ctrl.connect_error)
+                QtWidgets.QMessageBox.critical(self, self.tr("Reconnection"),
+                                               self.tr("Failure:\n\n{}").format(self.ctrl.connect_error))
 
         if not self._start_hw_task(self.ctrl.reconnect, done, done, controls=True):
-            self.btn_reconnect.setText("Reconnecter")
+            self.btn_reconnect.setText(self.tr("Reconnect"))
             self._connecting = False
 
     def _all_off(self) -> None:
         for label in self.ctrl.cfg.channels:
             self.ctrl.set_output(label, False)
-        self.ctrl.log("Toutes les voies coupées (Tout OFF).")
+        self.ctrl.log(self.tr("All channels cut off (All OFF)."))
 
     def _ask_essai_meta(self) -> tuple[str, str]:
         """Petit dialogue facultatif « Nom de l'essai / Opérateur ». Les deux
@@ -1056,15 +1094,15 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         valide, Échap laisse les champs vides. Retourne toujours (nom, opérateur)
         — l'enregistrement démarre dans tous les cas."""
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowTitle("Nouvel essai")
+        dlg.setWindowTitle(self.tr("New test"))
         form = QtWidgets.QFormLayout(dlg)
         nom_edit = QtWidgets.QLineEdit()
-        nom_edit.setPlaceholderText("(facultatif)")
+        nom_edit.setPlaceholderText(self.tr("(optional)"))
         op_edit = QtWidgets.QLineEdit(self._settings.value("operateur", "", type=str))
-        op_edit.setPlaceholderText("(facultatif)")
-        form.addRow("Nom de l'essai :", nom_edit)
-        form.addRow("Opérateur :", op_edit)
-        hint = QtWidgets.QLabel("Ces informations figureront dans le rapport d'essai.")
+        op_edit.setPlaceholderText(self.tr("(optional)"))
+        form.addRow(self.tr("Test name:"), nom_edit)
+        form.addRow(self.tr("Operator:"), op_edit)
+        hint = QtWidgets.QLabel(self.tr("This information will appear in the test report."))
         hint.setStyleSheet(theme.style("text.muted", "font-size:11px;"))
         form.addRow(hint)
         bb = QtWidgets.QDialogButtonBox(
@@ -1084,11 +1122,11 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         """Dialogue multiligne de conclusion (facultative). Retourne le texte
         (éventuellement vide) ou None si l'opérateur annule (pas de rapport)."""
         dlg = QtWidgets.QDialog(self)
-        dlg.setWindowTitle("Conclusion de l'essai")
+        dlg.setWindowTitle(self.tr("Test conclusion"))
         v = QtWidgets.QVBoxLayout(dlg)
-        v.addWidget(QtWidgets.QLabel(
-            "Conclusion de l'opérateur (facultative) — le rapport n'émet aucun "
-            "verdict de conformité :"))
+        v.addWidget(QtWidgets.QLabel(self.tr(
+            "Operator conclusion (optional) — the report issues no compliance "
+            "verdict:")))
         edit = QtWidgets.QPlainTextEdit(initial)
         edit.setMinimumSize(440, 150)
         v.addWidget(edit)
@@ -1108,25 +1146,25 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         from ..rapport import generer_rapport
 
         dossier = Path(dossier)
-        self.ctrl.log("Génération du rapport d'essai en cours…")
+        self.ctrl.log(self.tr("Generating the test report…"))
         task = Task(lambda: generer_rapport(dossier, conclusion=conclusion), self)
         self._report_tasks.append(task)
         task.done.connect(lambda pdf: self._on_report_done(pdf, auto))
         task.failed.connect(
-            lambda m: self.ctrl.log(f"Échec de génération du rapport : {m}"))
+            lambda m: self.ctrl.log(self.tr("Report generation failed: {}").format(m)))
         task.finished.connect(
             lambda: self._report_tasks.remove(task) if task in self._report_tasks else None)
         task.start()
 
     def _on_report_done(self, pdf, auto: bool) -> None:
         pdf = Path(pdf)
-        self.ctrl.log(f"Rapport d'essai généré : {pdf}")
+        self.ctrl.log(self.tr("Test report generated: {}").format(pdf))
         if auto:
             return   # cas déclenchement de sécurité : silencieux (journal seulement)
         box = QtWidgets.QMessageBox(self)
-        box.setWindowTitle("Rapport d'essai")
-        box.setText(f"Rapport généré :\n{pdf}")
-        open_btn = box.addButton("Ouvrir le PDF", QtWidgets.QMessageBox.AcceptRole)
+        box.setWindowTitle(self.tr("Test report"))
+        box.setText(self.tr("Report generated:\n{}").format(pdf))
+        open_btn = box.addButton(self.tr("Open the PDF"), QtWidgets.QMessageBox.AcceptRole)
         box.addButton(QtWidgets.QMessageBox.Close)
         box.exec()
         if box.clickedButton() is open_btn:
@@ -1141,7 +1179,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             if base.exists() else []
         if not dossiers:
             QtWidgets.QMessageBox.information(
-                self, title, "Aucun dossier d'essai dans logs/essais.")
+                self, title, self.tr("No test folder in logs/essais."))
             return None, None
         labels, by_label = [], {}
         for d in dossiers:
@@ -1155,13 +1193,13 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             labels.append(label)
             by_label[label] = (d, meta)
         choice, ok = QtWidgets.QInputDialog.getItem(
-            self, title, "Dossier d'essai :", labels, 0, False)
+            self, title, self.tr("Test folder:"), labels, 0, False)
         if not ok:
             return None, None
         return by_label[choice]
 
     def _menu_generate_report(self) -> None:
-        dossier, meta = self._pick_essai_dossier("Générer un rapport d'essai")
+        dossier, meta = self._pick_essai_dossier(self.tr("Generate a test report"))
         if dossier is None:
             return
         conclusion = self._ask_conclusion((meta or {}).get("conclusion", ""))
@@ -1170,7 +1208,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
     def _menu_replay_essai(self) -> None:
         """Ouvre une fenêtre de relecture (courbes rejouées) d'un essai enregistré."""
-        dossier, _meta = self._pick_essai_dossier("Rouvrir un essai (relecture)")
+        dossier, _meta = self._pick_essai_dossier(self.tr("Reopen a test (replay)"))
         if dossier is None:
             return
         from .replay import open_replay_dialog
@@ -1192,10 +1230,10 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             return
         self._settings.setValue("config_wizard_offered", True)
         r = QtWidgets.QMessageBox.question(
-            self, "Bienvenue dans ALIM_SEQ",
-            "Configurer votre banc maintenant ?\n\nL'assistant détecte les "
-            "alimentations (scan VISA) et prépare une configuration de départ. "
-            "Vous pourrez le relancer via Fichier → Assistant de configuration.",
+            self, self.tr("Welcome to ALIM_SEQ"),
+            self.tr("Configure your bench now?\n\nThe wizard detects the power "
+                    "supplies (VISA scan) and prepares a starting configuration. "
+                    "You can relaunch it via File → Configuration wizard."),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         if r == QtWidgets.QMessageBox.Yes:
             self._menu_config_wizard()
@@ -1216,17 +1254,17 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                 self.tabs.setCurrentIndex(i)
                 break
         QtWidgets.QMessageBox.information(
-            self, "Assistant de configuration",
-            "Configuration générée et chargée dans l'onglet Configuration.\n"
-            "Vérifiez les voies (noms, limites), puis cliquez "
-            "« ✓ Appliquer (recharge matériel) ».")
+            self, self.tr("Configuration wizard"),
+            self.tr("Configuration generated and loaded into the Configuration tab.\n"
+                    "Check the channels (names, limits), then click "
+                    "“✓ Apply (reload hardware)”."))
 
     def _menu_compare_essais(self) -> None:
         """Ouvre une fenêtre superposant les courbes de deux essais (recalées sur t=0)."""
-        a, _ma = self._pick_essai_dossier("Comparer — 1ᵉʳ essai (A)")
+        a, _ma = self._pick_essai_dossier(self.tr("Compare — 1st test (A)"))
         if a is None:
             return
-        b, _mb = self._pick_essai_dossier("Comparer — 2ᵉ essai (B)")
+        b, _mb = self._pick_essai_dossier(self.tr("Compare — 2nd test (B)"))
         if b is None:
             return
         from .replay import open_compare_dialog
@@ -1236,11 +1274,10 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             lambda *_: self._replay_dialogs.remove(dlg)
             if dlg in self._replay_dialogs else None)
 
-    @staticmethod
-    def _issue_label(issue: str) -> str:
-        return {"termine": "Terminé", "arret_utilisateur": "Interrompu",
-                "declenchement_securite": "DÉCLENCHEMENT DE SÉCURITÉ",
-                "en_cours": "en cours"}.get(issue, issue)
+    def _issue_label(self, issue: str) -> str:
+        return {"termine": self.tr("Completed"), "arret_utilisateur": self.tr("Interrupted"),
+                "declenchement_securite": self.tr("SAFETY TRIP"),
+                "en_cours": self.tr("in progress")}.get(issue, issue)
 
     def _menu_open_essais_dir(self) -> None:
         """« Où sont mes fichiers ? » : ouvre logs/essais/ dans l'explorateur."""
@@ -1253,11 +1290,11 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         (donc dans ``journal.log`` de l'essai en cours -> badge du rapport) et
         matérialisée sur le graphe live. Utilisable à tout moment (Ctrl+M)."""
         note, ok = QtWidgets.QInputDialog.getText(
-            self, "Marqueur", "Note (ex. « J'ai touché le condensateur ») :")
+            self, self.tr("Marker"), self.tr("Note (e.g. “I touched the capacitor”):"))
         if not ok:
             return
         note = (note or "").strip()
-        self.ctrl.log(f"📌 {note}" if note else "📌 marqueur")
+        self.ctrl.log(f"📌 {note}" if note else "📌 " + self.tr("marker"))
         if self.plot is not None:
             self.plot.mark(note or "📌")
 
@@ -1297,14 +1334,14 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             self.seq_progress.setValue(min(k, n))
             self.seq_progress.setFormat(f"{min(k, n)}/{n}")
             remaining = estimate_duration(self._actions[k:]) if self._actions else 0.0
-            self.seq_remaining.setText(f"~{remaining:.0f}s restantes" if remaining > 0 else "—")
+            self.seq_remaining.setText(self.tr("~{:.0f}s remaining").format(remaining) if remaining > 0 else "—")
         else:
             self.seq_progress.setMaximum(max(1, total))
             self.seq_progress.setValue(0)
-            self.seq_progress.setFormat(f"{total} action(s)" if total else "")
+            self.seq_progress.setFormat(self.tr("{} action(s)").format(total) if total else "")
             dur = estimate_duration(self._actions) if self._actions else 0.0
             self.seq_remaining.setText(
-                f"~{dur:.0f}s (hors SERVO/WAIT_*)" if dur > 0 else "")
+                self.tr("~{:.0f}s (excl. SERVO/WAIT_*)").format(dur) if dur > 0 else "")
         self.btn_step_next.setEnabled(running and self.runner.step_mode)
 
     # ------------------------------------------------------------- refresh
@@ -1336,19 +1373,19 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
         level = snap.safety_status
         if self._connecting:
-            text, level = "⏳ Connexion au matériel en cours…", NA
+            text, level = self.tr("⏳ Connecting to the hardware…"), NA
         elif not snap.connected:
-            text, level = "⛔ NON CONNECTÉ — vérifier VISA / NI-DAQmx puis « Reconnecter »", CRITICAL
+            text, level = self.tr("⛔ NOT CONNECTED — check VISA / NI-DAQmx then “Reconnect”"), CRITICAL
         elif snap.comm_lost:
-            text, level = f"⛔ PERTE DE COMMUNICATION : {snap.safety_message}", CRITICAL
+            text, level = self.tr("⛔ COMMUNICATION LOST: {}").format(snap.safety_message), CRITICAL
         elif snap.tripped:
-            text = f"⛔ SÉCURITÉ DÉCLENCHÉE : {snap.safety_message}"
+            text = self.tr("⛔ SAFETY TRIPPED: {}").format(snap.safety_message)
         elif snap.hw_fault:
-            text, level = f"⚠ {snap.hw_fault} — réarme l'alim puis « Reconnecter »", FAULT
+            text, level = self.tr("⚠ {} — reset the supply then “Reconnect”").format(snap.hw_fault), FAULT
         elif snap.safety_message:
-            text = f"Sécurité : {level} — {snap.safety_message}"
+            text = self.tr("Safety: {} — {}").format(level, snap.safety_message)
         else:
-            text = "Sécurité : OK"
+            text = self.tr("Safety: OK")
         self.banner.setText(text)
         self.banner.setStyleSheet(theme.style(theme.level_token(level), "padding:6px;"))
 
@@ -1360,8 +1397,8 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             essai = self.ctrl.essai
             if essai is not None:
                 self._auto_report_done = True
-                self.ctrl.log("Déclenchement de sécurité : génération automatique "
-                              "du rapport d'essai.")
+                self.ctrl.log(self.tr("Safety trip: automatic test-report "
+                                      "generation."))
                 self._run_report_task(essai.path, "", auto=True)
 
         # Alerte sonore : bip à l'entrée en état critique, puis ~toutes les secondes.
@@ -1380,17 +1417,17 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         # Barre d'état : pastille de connexion + mode + cadence + enregistrement.
         if not snap.connected or snap.comm_lost:
             self.sb_conn.setText("●"); self.sb_conn.setStyleSheet(theme.style("text.error"))
-            self.sb_conn.setToolTip("Matériel non connecté")
+            self.sb_conn.setToolTip(self.tr("Hardware not connected"))
         else:
             self.sb_conn.setText("●"); self.sb_conn.setStyleSheet(theme.style("text.ok"))
-            self.sb_conn.setToolTip("Matériel connecté")
-        self.sb_cadence.setText(f"mesures {snap.meas_period:.2f}s · "
-                                f"température {snap.temp_period:.2f}s")
+            self.sb_conn.setToolTip(self.tr("Hardware connected"))
+        self.sb_cadence.setText(self.tr("meas {:.2f}s · temp {:.2f}s").format(
+            snap.meas_period, snap.temp_period))
         if self.ctrl.is_recording:
             dossier = self.ctrl.recording_dossier
             self.sb_rec.setText("⏺ REC" + (f" · {dossier}" if dossier else ""))
             self.sb_rec.setStyleSheet(theme.style("text.error", "font-weight:bold;"))
-            self.sb_rec.setToolTip(f"Dossier d'essai en cours : {dossier}" if dossier else "")
+            self.sb_rec.setToolTip(self.tr("Current test folder: {}").format(dossier) if dossier else "")
         else:
             self.sb_rec.setText(""); self.sb_rec.setStyleSheet(""); self.sb_rec.setToolTip("")
         # Puissance totale délivrée (somme |V·I| des voies physiques).
@@ -1418,10 +1455,10 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             self.btn_start.setEnabled(
                 not self._hw_busy and snap.connected and not snap.comm_lost)
         self.btn_pause.setEnabled(running)
-        self.btn_pause.setText("▶ Reprendre" if (running and self.runner.is_paused) else "⏸ Pause")
+        self.btn_pause.setText(self.tr("▶ Resume") if (running and self.runner.is_paused) else self.tr("⏸ Pause"))
         self._update_seq_progress(running)
-        self.btn_rec.setText("■ Arrêter l'enregistrement" if self.ctrl.is_recording
-                             else "● Démarrer l'enregistrement")
+        self.btn_rec.setText(self.tr("■ Stop recording") if self.ctrl.is_recording
+                             else self.tr("● Start recording"))
         self._update_editor_selections()
 
         for line in self.ctrl.drain_logs():
@@ -1431,9 +1468,9 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         # Modifications de séquence non enregistrées : Enregistrer / Ignorer / Annuler.
         if self._seq_modified:
             resp = QtWidgets.QMessageBox.question(
-                self, "Séquence non enregistrée",
-                "La séquence en cours d'édition a des modifications non enregistrées.\n"
-                "Enregistrer avant de quitter ?",
+                self, self.tr("Unsaved sequence"),
+                self.tr("The sequence being edited has unsaved changes.\n"
+                        "Save before quitting?"),
                 QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard
                 | QtWidgets.QMessageBox.Cancel)
             if resp == QtWidgets.QMessageBox.Cancel:
@@ -1443,7 +1480,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                 self._seq_save()
         self._settings.setValue("geometry", self.saveGeometry())
         if QtWidgets.QMessageBox.question(
-                self, "Quitter", "Couper les alimentations et quitter ?"
+                self, self.tr("Quit"), self.tr("Switch off the supplies and quit?")
         ) == QtWidgets.QMessageBox.Yes:
             try:
                 self.runner.force_stop()
@@ -1474,14 +1511,53 @@ def _set_app_icon(app) -> None:
             pass
 
 
+# Languages the app ships translations for. "en" is the base (source) language.
+SUPPORTED_LANGUAGES = {"en": "English", "fr": "Français"}
+
+# Keeps installed QTranslator instances alive for the app lifetime.
+_installed_translators: List[QtCore.QTranslator] = []
+
+
+def resolve_language(settings: QtCore.QSettings) -> str:
+    """Language to use: saved choice, else system locale, else English."""
+    saved = settings.value("ui/language", "", type=str)
+    if saved in SUPPORTED_LANGUAGES:
+        return saved
+    sys_lang = QtCore.QLocale.system().name().split("_")[0].lower()
+    return sys_lang if sys_lang in SUPPORTED_LANGUAGES else "en"
+
+
+def install_language(app: QtWidgets.QApplication, lang: str) -> None:
+    """Install the GUI (.qm) and domain (gettext) catalogs for ``lang``.
+
+    English is the base language: no ``.qm`` is needed (source strings are English)
+    and the domain layer falls back to identity. Called once at startup.
+    """
+    global _installed_translators
+    for tr in _installed_translators:
+        app.removeTranslator(tr)
+    _installed_translators = []
+
+    i18n.set_language(lang)  # domain layer (controller logs, reports…)
+
+    if lang != "en":
+        qm = Path(__file__).resolve().parent / "i18n" / f"alim_seq_{lang}.qm"
+        if qm.exists():
+            translator = QtCore.QTranslator()
+            if translator.load(str(qm)):
+                app.installTranslator(translator)
+                _installed_translators.append(translator)
+
+
 def run(ctrl: Controller) -> None:
     app = QtWidgets.QApplication.instance()
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
-    app.setStyle("Fusion")  # rendu homogène et moderne (Linux/Windows)
+    app.setStyle("Fusion")  # homogeneous, modern rendering (Linux/Windows)
     app.setApplicationName("ALIM_SEQ")
     app.setOrganizationName("ALIM_SEQ")
     _set_app_icon(app)
+    install_language(app, resolve_language(QtCore.QSettings("ALIM_SEQ", "ALIM_SEQ")))
     win = AlimSeqQtGUI(ctrl)
     win.show()
     app.exec()

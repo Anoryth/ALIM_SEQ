@@ -134,39 +134,45 @@ class CompletingPlainTextEdit(QtWidgets.QPlainTextEdit):
 class EditorMixin:
     """Onglet Éditeur de séquence, greffé sur :class:`AlimSeqQtGUI`."""
 
-    _SEQ_ROWS = [
-        ("SET", "voie V [I]", "tension + limite courant"),
-        ("SETV", "voie = expr", "tension via formule"),
-        ("SETI", "voie = expr", "limite courant via formule"),
-        ("ON", "voie", "allumer"),
-        ("OFF", "voie", "éteindre"),
-        ("WAIT", "secondes", "pause (interruptible)"),
-        ("RAMP", "voie Vfin durée", "rampe depuis la valeur"),
-        ("RAMP", "voie Vdeb Vfin durée [pas]", "rampe explicite ([pas]=nb de pas, entier≥2)"),
-        ("SERVO_LIN", "réglée mesurée Icible", "asserv. pas fixe (SERVO=alias)"),
-        ("SERVO_ADAPT", "réglée mesurée Icible", "asserv. pas adaptatif"),
-        ("WAIT_CURRENT", "voie op val", "attend cond. courant"),
-        ("WAIT_TEMP", "capteur op val", "attend cond. température"),
-        ("LOG", "texte", "message au journal"),
-        ("ALL_OFF", "", "éteint toutes les voies"),
-        ("RELAY", "sortie ON|OFF", "ferme/ouvre une sortie de relais"),
-    ]
-    _SEQ_TEMPLATES = {
-        "SET": "SET <voie> <V> <I>",
-        "SETV": "SETV <voie> = <expr>",
-        "SETI": "SETI <voie> = <expr>",
-        "ON": "ON <voie>",
-        "OFF": "OFF <voie>",
-        "WAIT": "WAIT <s>",
-        "RAMP": "RAMP <voie> <Vfin> <duree>",
-        "SERVO_LIN": "SERVO_LIN <reglee> <mesuree> <Icible> step=0.02 tol=0.01",
-        "SERVO_ADAPT": "SERVO_ADAPT <reglee> <mesuree> <Icible> step=0.5 tol=0.01",
-        "WAIT_CURRENT": "WAIT_CURRENT <voie> >= <val> timeout=10",
-        "WAIT_TEMP": "WAIT_TEMP <capteur> <= <val> timeout=10",
-        "LOG": "LOG <texte>",
-        "ALL_OFF": "ALL_OFF",
-        "RELAY": "RELAY <sortie> ON",
-    }
+    def _seq_rows(self):
+        tr = self.tr
+        return [
+            ("SET", tr("channel V [I]"), tr("voltage + current limit")),
+            ("SETV", tr("channel = expr"), tr("voltage via formula")),
+            ("SETI", tr("channel = expr"), tr("current limit via formula")),
+            ("ON", tr("channel"), tr("switch on")),
+            ("OFF", tr("channel"), tr("switch off")),
+            ("WAIT", tr("seconds"), tr("pause (interruptible)")),
+            ("RAMP", tr("channel Vend duration"), tr("ramp from current value")),
+            ("RAMP", tr("channel Vstart Vend duration [steps]"),
+             tr("explicit ramp ([steps]=number of steps, integer≥2)")),
+            ("SERVO_LIN", tr("set measured Itarget"), tr("fixed-step servo (SERVO=alias)")),
+            ("SERVO_ADAPT", tr("set measured Itarget"), tr("adaptive-step servo")),
+            ("WAIT_CURRENT", tr("channel op val"), tr("wait for current cond.")),
+            ("WAIT_TEMP", tr("sensor op val"), tr("wait for temperature cond.")),
+            ("LOG", tr("text"), tr("message to the log")),
+            ("ALL_OFF", "", tr("switches off all channels")),
+            ("RELAY", tr("output ON|OFF"), tr("closes/opens a relay output")),
+        ]
+
+    def _seq_templates(self):
+        tr = self.tr
+        return {
+            "SET": tr("SET <channel> <V> <I>"),
+            "SETV": tr("SETV <channel> = <expr>"),
+            "SETI": tr("SETI <channel> = <expr>"),
+            "ON": tr("ON <channel>"),
+            "OFF": tr("OFF <channel>"),
+            "WAIT": tr("WAIT <s>"),
+            "RAMP": tr("RAMP <channel> <Vend> <duration>"),
+            "SERVO_LIN": tr("SERVO_LIN <set> <measured> <Itarget> step=0.02 tol=0.01"),
+            "SERVO_ADAPT": tr("SERVO_ADAPT <set> <measured> <Itarget> step=0.5 tol=0.01"),
+            "WAIT_CURRENT": tr("WAIT_CURRENT <channel> >= <val> timeout=10"),
+            "WAIT_TEMP": tr("WAIT_TEMP <sensor> <= <val> timeout=10"),
+            "LOG": tr("LOG <text>"),
+            "ALL_OFF": "ALL_OFF",
+            "RELAY": tr("RELAY <output> ON"),
+        }
 
     def _seq_help_html(self, labels, sensors, relays=()) -> str:
         C = theme.pair("syntax.command")[1]
@@ -174,9 +180,9 @@ class EditorMixin:
         G = theme.pair("syntax.label")[1]
         cm = theme.pair("syntax.comment")[1]
         out = ["<div style='font-family:sans-serif; font-size:12px'>",
-               f"<p style='color:{cm}'>Cliquer sur une commande pour l'insérer au curseur.</p>",
+               f"<p style='color:{cm}'>{self.tr('Click a command to insert it at the cursor.')}</p>",
                "<table cellspacing='0' cellpadding='2'>"]
-        for cmd, args, desc in self._SEQ_ROWS:
+        for cmd, args, desc in self._seq_rows():
             out.append(
                 "<tr>"
                 f"<td><a href='ins:{cmd}' style='color:{C}; font-weight:bold; "
@@ -185,16 +191,17 @@ class EditorMixin:
                 f"<td style='color:{cm}'>{desc}</td></tr>")
         out.append("</table>")
         out.append(
-            f"<p style='color:{cm}'>clés SERVO : step, min, max, tol, timeout, settle, "
-            "invert (+ damping pour ADAPT)<br>op : &lt; &lt;= &gt; &gt;= == !=<br>"
-            "# ou // : commentaire</p>")
-        out.append(f"<p><b>Voies &amp; groupes</b><br>"
+            f"<p style='color:{cm}'>" + self.tr(
+                "SERVO keys: step, min, max, tol, timeout, settle, invert "
+                "(+ damping for ADAPT)<br>op: &lt; &lt;= &gt; &gt;= == !=<br>"
+                "# or // : comment") + "</p>")
+        out.append(f"<p><b>{self.tr('Channels &amp; groups')}</b><br>"
                    f"<span style='color:{G}'>{', '.join(labels)}</span></p>")
         if sensors:
-            out.append(f"<p><b>Capteurs</b><br>"
+            out.append(f"<p><b>{self.tr('Sensors')}</b><br>"
                        f"<span style='color:{G}'>{', '.join(sensors)}</span></p>")
         if relays:
-            out.append(f"<p><b>Relais</b><br>"
+            out.append(f"<p><b>{self.tr('Relays')}</b><br>"
                        f"<span style='color:{G}'>{', '.join(relays)}</span></p>")
         out.append("</div>")
         return "".join(out)
@@ -202,11 +209,11 @@ class EditorMixin:
     def _build_seq_editor_tab(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget(); v = QtWidgets.QVBoxLayout(w)
         bar = QtWidgets.QHBoxLayout()
-        for txt, fn in [("Nouveau", self._seq_new), ("Ouvrir…", self._seq_open),
-                        ("Enregistrer", self._seq_save), ("Enregistrer sous…", self._seq_save_as),
-                        ("Vérifier", self._seq_verify)]:
+        for txt, fn in [(self.tr("New"), self._seq_new), (self.tr("Open…"), self._seq_open),
+                        (self.tr("Save"), self._seq_save), (self.tr("Save as…"), self._seq_save_as),
+                        (self.tr("Check"), self._seq_verify)]:
             b = QtWidgets.QPushButton(txt); b.clicked.connect(fn); bar.addWidget(b)
-        run = QtWidgets.QPushButton("▶ Charger & exécuter")
+        run = QtWidgets.QPushButton(self.tr("▶ Load & run"))
         run.setStyleSheet(theme.style("button.start", "font-weight:bold;"))
         run.clicked.connect(self._seq_load_and_run); bar.addWidget(run)
         self._seq_run_btn = run
@@ -306,7 +313,7 @@ class EditorMixin:
         s = url.toString()
         if not s.startswith("ins:"):
             return
-        snippet = self._SEQ_TEMPLATES.get(s[4:], s[4:])
+        snippet = self._seq_templates().get(s[4:], s[4:])
         cur = self.seq_editor.textCursor()
         if cur.block().text().strip():       # ligne non vide -> nouvelle ligne
             cur.movePosition(QtGui.QTextCursor.EndOfLine)
@@ -318,13 +325,13 @@ class EditorMixin:
     def _seq_new(self) -> None:
         self.seq_editor.clear(); self.seq_edit_path.setText("")
         self.seq_editor.document().setModified(False)
-        self.seq_edit_status.setText("Nouvelle séquence.")
+        self.seq_edit_status.setText(self.tr("New sequence."))
         self.seq_edit_status.setStyleSheet(theme.style("text.muted"))
         self._update_title()
 
     def _seq_open(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Ouvrir une séquence", self._dialog_dir(), "Séquence (*.seq *.txt);;Tous (*)")
+            self, self.tr("Open a sequence"), self._dialog_dir(), self.tr("Sequence (*.seq *.txt);;All (*)"))
         if not path:
             return
         self.seq_editor.setPlainText(Path(path).read_text(encoding="utf-8"))
@@ -343,13 +350,13 @@ class EditorMixin:
         Path(p).write_text(self.seq_editor.toPlainText(), encoding="utf-8")
         self.seq_editor.document().setModified(False)
         self._settings.setValue("last_seq", p)
-        self.seq_edit_status.setText(f"Enregistré : {Path(p).name}")
+        self.seq_edit_status.setText(self.tr("Saved: {}").format(Path(p).name))
         self.seq_edit_status.setStyleSheet(theme.style("text.ok"))
         self._update_title()
 
     def _seq_save_as(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Enregistrer la séquence", self._dialog_dir(), "Séquence (*.seq);;Tous (*)")
+            self, self.tr("Save the sequence"), self._dialog_dir(), self.tr("Sequence (*.seq);;All (*)"))
         if not path:
             return
         self.seq_edit_path.setText(path)
@@ -367,15 +374,16 @@ class EditorMixin:
         try:
             actions = self._seq_parse_editor()
         except (SequenceError, ValueError) as exc:
-            m = re.search(r"[Ll]igne\s+(\d+)", str(exc))
+            # Message is localized ("Line N" in English, "Ligne N" in French).
+            m = re.search(r"(?:Line|Ligne)\s+(\d+)", str(exc))
             self._seq_error_line = int(m.group(1)) if m else 0
             self.seq_edit_status.setText(f"✗ {exc}")
             self.seq_edit_status.setStyleSheet(theme.style("text.error"))
         else:
             self._seq_error_line = 0
             dur = estimate_duration(actions)
-            extra = f", ~{dur:.0f}s mini" if dur > 0 else ""
-            self.seq_edit_status.setText(f"✓ Séquence valide ({len(actions)} actions{extra}).")
+            extra = self.tr(", ~{:.0f}s min").format(dur) if dur > 0 else ""
+            self.seq_edit_status.setText(self.tr("✓ Valid sequence ({} actions{}).").format(len(actions), extra))
             self.seq_edit_status.setStyleSheet(theme.style("text.ok"))
         self._update_editor_selections()
 
@@ -387,8 +395,8 @@ class EditorMixin:
             self.seq_edit_status.setStyleSheet(theme.style("text.error"))
             return False
         dur = estimate_duration(actions)
-        extra = f", ~{dur:.0f}s mini" if dur > 0 else ""
-        self.seq_edit_status.setText(f"✓ Séquence valide ({len(actions)} actions{extra}).")
+        extra = self.tr(", ~{:.0f}s min").format(dur) if dur > 0 else ""
+        self.seq_edit_status.setText(self.tr("✓ Valid sequence ({} actions{}).").format(len(actions), extra))
         self.seq_edit_status.setStyleSheet(theme.style("text.ok"))
         return True
 

@@ -27,8 +27,8 @@ class CurveView(QtWidgets.QWidget):
         self._xs: List[float] = []
         self._ys: List[float] = []
         self._mk: List[list] = []
-        self.xlabel = "Tension (V)"
-        self.ylabel = "Température (°C)"
+        self.xlabel = QtCore.QCoreApplication.translate("plot", "Voltage (V)")
+        self.ylabel = QtCore.QCoreApplication.translate("plot", "Temperature (°C)")
 
     def set_data(self, xs, ys, markers=None) -> None:
         self._xs, self._ys = list(xs), list(ys)
@@ -162,7 +162,8 @@ def dessiner_series(painter: QtGui.QPainter, rect: QtCore.QRect,
               for pt in series[n] if pt[1] == pt[1]]
     if not allpts:
         p.setPen(fg)
-        p.drawText(L, T, R - L, B - T, QtCore.Qt.AlignCenter, "En attente de données…")
+        p.drawText(L, T, R - L, B - T, QtCore.Qt.AlignCenter,
+                   QtCore.QCoreApplication.translate("plot", "Waiting for data…"))
         return PlotGeom(L, R, T, B, 0.0, 1.0, [], empty=True)
     tmax = max(pt[0] for pt in allpts)
     tmin = max(0.0, tmax - window_s)
@@ -261,12 +262,14 @@ class TempPlotQt(QtWidgets.QWidget):
     Fenêtre glissante, une couleur par courbe, marqueurs de séquence, curseur de
     lecture au survol, légende cliquable (masquer/afficher une courbe)."""
 
-    # mode -> (titre d'axe, suffixe d'unité)
-    _MODES = {
-        "temp": ("Température (°C)", "°C"),
-        "current": ("Courant (A)", "A"),
-        "voltage": ("Tension (V)", "V"),
-    }
+    # mode -> (axis title, unit suffix)
+    @staticmethod
+    def _modes():
+        return {
+            "temp": (QtCore.QCoreApplication.translate("plot", "Temperature (°C)"), "°C"),
+            "current": (QtCore.QCoreApplication.translate("plot", "Current (A)"), "A"),
+            "voltage": (QtCore.QCoreApplication.translate("plot", "Voltage (V)"), "V"),
+        }
 
     def __init__(self, sensors, warnings=None, criticals=None, window_s=120.0,
                  channels=None, parent=None):
@@ -302,7 +305,7 @@ class TempPlotQt(QtWidgets.QWidget):
         self.update()
 
     def set_mode(self, mode: str) -> None:
-        if mode in self._MODES:
+        if mode in self._modes():
             self.mode = mode
             self.update()
 
@@ -424,9 +427,9 @@ class TempPlotQt(QtWidgets.QWidget):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         series = self._series[self.mode]
         names = [n for n in self._names() if n in series]
-        ylabel, unit = self._MODES[self.mode]
+        ylabel, unit = self._modes()[self.mode]
         temp_mode = self.mode == "temp"
-        axes = {"xlabel": f"temps (s) — fenêtre {int(self.window_s)} s",
+        axes = {"xlabel": QtCore.QCoreApplication.translate("plot", "time (s) — window {} s").format(int(self.window_s)),
                 "ylabel": ylabel, "unit": unit, "temp_mode": temp_mode,
                 "window_s": self.window_s, "colors": self.color, "hidden": self._hidden}
         geom = dessiner_series(p, self.rect(), {n: series[n] for n in names},

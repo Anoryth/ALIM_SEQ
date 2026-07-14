@@ -1,76 +1,76 @@
-# Guide d'intégration de drivers d'appareils
+# Device driver integration guide
 
-Ce guide s'adresse aux **contributeurs** qui veulent brancher un nouvel appareil
-(alimentation, module de mesure, relais, ou tout autre instrument) sur ALIM_SEQ.
-L'architecture est conçue pour que **le reste de l'application s'adapte
-automatiquement** : config, IHM, séquenceur, simulation, validation.
+This guide is for **contributors** who want to wire a new device (power supply,
+measurement module, relay, or any other instrument) into ALIM_SEQ. The architecture is
+designed so that **the rest of the application adapts automatically**: config, GUI,
+sequencer, simulation, validation.
 
-Pour l'architecture d'ensemble et la conception du modèle par capacités, voir
-[ARCHITECTURE.md](ARCHITECTURE.md) (§5, *Pilotes matériel et simulation*).
+For the overall architecture and the design of the capability model, see
+[ARCHITECTURE.md](ARCHITECTURE.md) (§5, *Hardware drivers and simulation*).
 
 ---
 
-## 1. Le modèle mental : **capacités**, pas catégories
+## 1. The mental model: **capabilities**, not categories
 
-Un appareil n'est pas « une alim » ou « un DAQ ». C'est un
-[`Instrument`](../alim_seq/instrument.py) (cycle de vie `connect`/`close` + identité)
-qui **déclare les capacités** qu'il expose :
+A device is not "a supply" or "a DAQ". It is an
+[`Instrument`](../alim_seq/instrument.py) (lifecycle `connect`/`close` + identity)
+that **declares the capabilities** it exposes:
 
-| Capacité | Ce qu'elle promet | Exemples |
+| Capability | What it promises | Examples |
 |---|---|---|
-| `SourceTension` | imposer une tension + limite de courant, couper | alim, charge en sink |
-| `MesureVI` | mesurer V/I (+ mode CV/CC, défauts) | alim, multimètre |
-| `MesureTemperature` | fournir des °C par point + tensions brutes | module NI, capteur I²C |
-| `Actionneur` | ouvrir/fermer une sortie logique | relais, GPIO |
+| `SourceTension` | impose a voltage + current limit, cut off | supply, sink load |
+| `MesureVI` | measure V/I (+ CV/CC mode, faults) | supply, multimeter |
+| `MesureTemperature` | provide °C per point + raw voltages | NI module, I²C sensor |
+| `Actionneur` | open/close a logical output | relay, GPIO |
 
-Une alimentation implémente **`SourceTension` + `MesureVI`**. Le contrôleur ne parle
-qu'aux capacités (`isinstance(instr, MesureTemperature)`), jamais aux types concrets.
-Un appareil peut cumuler des capacités inédites.
+A power supply implements **`SourceTension` + `MesureVI`**. The controller only talks
+to capabilities (`isinstance(instr, MesureTemperature)`), never to concrete types. A
+device may combine unprecedented capabilities.
 
-Chaque instrument est fabriqué par un **registre unifié** :
+Each instrument is built by a **unified registry**:
 [`create_instrument(driver, simulate, name, **params)`](../alim_seq/instrument.py).
 
-**Deux règles d'or, non négociables** (elles définissent l'identité du projet) :
+**Two golden, non-negotiable rules** (they define the project's identity):
 
-1. **Parité simulation / réel.** Tout driver réel a un **mock** au comportement
-   plausible. Le même code doit tourner en simulation (sans matériel) et en réel.
-2. **Sûreté d'abord.** `close()` doit **couper les sorties** même si l'appareil est
-   lent/mal en point ; une mesure non fiable doit se signaler en **défaut**, jamais
-   renvoyer une valeur plausible fausse. Le driver **ne prend aucun verrou** : la
-   sérialisation est faite par le contrôleur (un verrou par instrument).
+1. **Simulation / real parity.** Every real driver has a **mock** with plausible
+   behavior. The same code must run in simulation (no hardware) and on real hardware.
+2. **Safety first.** `close()` must **cut off the outputs** even if the device is
+   slow/unwell; an unreliable measurement must report a **fault**, never return a
+   falsely plausible value. The driver **takes no lock**: serialization is done by the
+   controller (one lock per instrument).
 
 ---
 
-## 2. Cas le plus fréquent : une nouvelle **alimentation**
+## 2. Most frequent case: a new **power supply**
 
-### 2.1 Même famille SCPI que les R&S HMP
+### 2.1 Same SCPI family as the R&S HMP
 
-Si l'appareil parle le même dialecte que les HMP40xx (beaucoup d'alims R&S/HMC),
-sous-classez [`HMP4040`](../alim_seq/psu.py) et ajustez ce qui diffère :
+If the device speaks the same dialect as the HMP40xx (many R&S/HMC supplies),
+subclass [`HMP4040`](../alim_seq/psu.py) and adjust what differs:
 
 ```python
 # alim_seq/psu.py
 class HMP2020(HMP4040):
-    """R&S HMP2020 — même famille SCPI, 2 voies."""
+    """R&S HMP2020 — same SCPI family, 2 channels."""
     n_channels = 2
     model = "HMP2020"
-    # Limites SOA par voie (datasheet) — servent à VALIDER la config :
+    # Per-channel SOA limits (datasheet) — used to VALIDATE the config:
     max_voltage = 32.0
     max_current = 10.0
     max_power = 80.0
 ```
 
-### 2.2 Un dialecte différent (nouvelle marque)
+### 2.2 A different dialect (new brand)
 
-Sous-classez directement [`BasePSU`](../alim_seq/psu.py) (qui est déjà
-`Instrument + SourceTension + MesureVI`) et implémentez le contrat :
+Subclass [`BasePSU`](../alim_seq/psu.py) directly (which is already `Instrument +
+SourceTension + MesureVI`) and implement the contract:
 
 ```python
 class NGP804(BasePSU):
-    """Exemple : R&S NGP804 (4 voies). Adaptez à VOTRE appareil."""
+    """Example: R&S NGP804 (4 channels). Adapt to YOUR device."""
     n_channels = 4
     model = "NGP804"
-    max_voltage, max_current, max_power = 64.0, 20.0, 200.0   # SOA / voie
+    max_voltage, max_current, max_power = 64.0, 20.0, 200.0   # SOA / channel
 
     def __init__(self, resource, visa_backend="", use_cc_status=False,
                  query_delay_s=0.0, log=None, **_):
@@ -79,18 +79,18 @@ class NGP804(BasePSU):
         self._log = log or (lambda _m: None)
         self._inst = None
 
-    # --- cycle de vie ----------------------------------------------------
+    # --- lifecycle -------------------------------------------------------
     def connect(self):
-        import pyvisa                                   # import PARESSEUX
+        import pyvisa                                   # LAZY import
         rm = pyvisa.ResourceManager(self.visa_backend) if self.visa_backend \
             else pyvisa.ResourceManager()
         self._inst = rm.open_resource(self.resource)
         self._inst.read_termination = self._inst.write_termination = "\n"
-        self.idn = str(self._inst.query("*IDN?")).strip()   # échec RAPIDE si muet
+        self.idn = str(self._inst.query("*IDN?")).strip()   # FAST failure if mute
 
     def close(self):
-        # IMPÉRATIF : couper les sorties, sans se bloquer si l'appareil ne répond
-        # plus (timeout court), puis fermer la session quoi qu'il arrive.
+        # MANDATORY: cut off the outputs, without blocking if the device no longer
+        # responds (short timeout), then close the session whatever happens.
         if self._inst is None:
             return
         try:
@@ -103,7 +103,7 @@ class NGP804(BasePSU):
             finally:
                 self._inst = None
 
-    # --- capacité SourceTension -----------------------------------------
+    # --- SourceTension capability ---------------------------------------
     def set_voltage(self, channel, voltage):
         self._inst.write(f"INST:NSEL {channel}"); self._inst.write(f"VOLT {voltage:.4f}")
 
@@ -113,7 +113,7 @@ class NGP804(BasePSU):
     def set_output(self, channel, on):
         self._inst.write(f"INST:NSEL {channel}"); self._inst.write(f"OUTP {int(on)}")
 
-    # --- capacité MesureVI ----------------------------------------------
+    # --- MesureVI capability ---------------------------------------------
     def measure_voltage(self, channel):
         self._inst.write(f"INST:NSEL {channel}"); return float(self._inst.query("MEAS:VOLT?"))
 
@@ -121,120 +121,120 @@ class NGP804(BasePSU):
         self._inst.write(f"INST:NSEL {channel}"); return float(self._inst.query("MEAS:CURR?"))
 
     def measure_status(self, channel):
-        """Retourne {'mode': 'CV'|'CC'|None, 'faults': [...]}. Si l'appareil ne sait
-        pas dire, renvoyez {'mode': None, 'faults': []} : le contrôleur infère le
-        mode depuis V/I. 'faults' peut contenir 'OVP', 'FUSE', 'OTP'."""
+        """Return {'mode': 'CV'|'CC'|None, 'faults': [...]}. If the device cannot
+        tell, return {'mode': None, 'faults': []}: the controller infers the mode
+        from V/I. 'faults' may contain 'OVP', 'FUSE', 'OTP'."""
         return {"mode": None, "faults": []}
 ```
 
-> `set_voltage` reçoit une **magnitude positive** : le logiciel gère la polarité des
-> rails négatifs (les alims ne sortent que du positif). Ne réinventez pas le signe.
+> `set_voltage` receives a **positive magnitude**: the software handles the polarity
+> of negative rails (supplies only output positive). Do not reinvent the sign.
 
-### 2.3 Enregistrer le modèle
+### 2.3 Register the model
 
-Ajoutez la classe au registre — **c'est tout** :
+Add the class to the registry — **that's all**:
 
 ```python
-# alim_seq/psu.py, en bas
+# alim_seq/psu.py, at the bottom
 PSU_MODELS = {..., "NGP804": NGP804}
 ```
 
-`create_psu` fabrique alors un `MockPSU` (bon nombre de voies) en simulation et votre
-driver en réel ; la validation de config accepte le modèle et vérifie voies/limites ;
-l'IHM le propose dans le menu déroulant et l'assistant de configuration.
+`create_psu` then builds a `MockPSU` (right channel count) in simulation and your
+driver on hardware; config validation accepts the model and checks channels/limits;
+the GUI offers it in the drop-down and the configuration wizard.
 
-**La simulation est déjà couverte** : `MockPSU` (charge résistive + bruit, nombre de
-voies paramétrable) sert de mock pour *tout* modèle de source. Vous n'avez rien à
-écrire pour la parité.
+**Simulation is already covered**: `MockPSU` (resistive load + noise, configurable
+channel count) serves as the mock for *any* source model. You have nothing to write
+for parity.
 
 ---
 
-## 3. Autres capacités
+## 3. Other capabilities
 
-### 3.1 Module de mesure de température
+### 3.1 Temperature measurement module
 
-Sous-classez [`BaseDAQ`](../alim_seq/daq.py) (`Instrument + MesureTemperature`) :
+Subclass [`BaseDAQ`](../alim_seq/daq.py) (`Instrument + MesureTemperature`):
 
 ```python
-class MonDAQ(BaseDAQ):
+class MyDAQ(BaseDAQ):
     def __init__(self, device, sensors): ...
     def connect(self): ...
     def close(self): ...
-    def read_temperatures(self) -> dict:   # {nom_capteur: °C}
+    def read_temperatures(self) -> dict:   # {sensor_name: °C}
         ...
-    def read_voltages(self) -> dict:       # {nom_capteur: V bruts}  (filet de sécurité)
+    def read_voltages(self) -> dict:       # {sensor_name: raw V}  (safety net)
         ...
 ```
 
-**Détection de défaut obligatoire** : une mesure non fiable (capteur débranché,
-entrée collée à un rail) doit produire `float("nan")` — le contrôleur la classe en
-`FAULT` et l'exclut de la sécurité. Ne renvoyez **jamais** une température plausible
-inventée (voir la logique des convertisseurs dans
-[temperature.py](../alim_seq/temperature.py), qui renvoient `NaN` en défaut).
+**Mandatory fault detection**: an unreliable measurement (disconnected sensor, input
+stuck to a rail) must produce `float("nan")` — the controller classifies it as `FAULT`
+and excludes it from safety. **Never** return an invented plausible temperature (see
+the converter logic in [temperature.py](../alim_seq/temperature.py), which returns
+`NaN` on a fault).
 
-Enregistrement (branche température de `create_instrument`) : ajoutez un alias dans
-`_NIDAQ_ALIASES` (ou une clé de driver dédiée) et instanciez votre classe dans la
-branche correspondante d'[instrument.py](../alim_seq/instrument.py). Fournissez un
-mock (modèle simple) pour la simulation, comme `MockDAQ`.
+Registration (temperature branch of `create_instrument`): add an alias in
+`_NIDAQ_ALIASES` (or a dedicated driver key) and instantiate your class in the
+matching branch of [instrument.py](../alim_seq/instrument.py). Provide a mock (simple
+model) for the simulation, like `MockDAQ`.
 
-### 3.2 Relais / actionneur
+### 3.2 Relay / actuator
 
-Sous-classez [`BaseRelay`](../alim_seq/relay.py) (`Instrument + Actionneur`) :
+Subclass [`BaseRelay`](../alim_seq/relay.py) (`Instrument + Actionneur`):
 
 ```python
-class MonRelais(BaseRelay):
+class MyRelay(BaseRelay):
     def connect(self): ...
-    def close(self): self.all_off()        # état de repos sûr
-    def set_state(self, label, on): ...     # ferme/ouvre une sortie
-    def get_state(self, label): ...         # relit l'état (ou None)
+    def close(self): self.all_off()        # safe rest state
+    def set_state(self, label, on): ...     # close/open an output
+    def get_state(self, label): ...         # read back the state (or None)
 ```
 
-Enregistrement : ajoutez le nom de driver à `_RELAY_DRIVERS`, construisez la classe
-dans la branche actionneur de `create_instrument`, et ajoutez-la au dict `INSTRUMENTS`
-+ `available_instruments()`. Le mock `MockRelay` sert la simulation. Le reste (config
-`instruments.<nom>.outputs`, commande de séquence `RELAY`, primitive contrôleur
-`set_relay`, état de sécurité, affichage IHM) est **déjà branché**.
+Registration: add the driver name to `_RELAY_DRIVERS`, build the class in the actuator
+branch of `create_instrument`, and add it to the `INSTRUMENTS` dict +
+`available_instruments()`. The `MockRelay` mock serves the simulation. The rest (config
+`instruments.<name>.outputs`, the `RELAY` sequence command, the `set_relay` controller
+primitive, the safe state, the GUI display) is **already wired**.
 
-### 3.3 Une capacité entièrement nouvelle
+### 3.3 An entirely new capability
 
-Définissez un **mixin fin** dans [instrument.py](../alim_seq/instrument.py) (méthodes
-en `...`, pas de sur-abstraction), faites-le hériter à votre driver, exposez-le via
-`driver_role`, et faites itérer le contrôleur `isinstance(instr, MaCapacité)` là où
-c'est pertinent — **sans casser l'invariant d'ordre des verrous** (voir
-[DEVELOPPEMENT.md §6](DEVELOPPEMENT.md)).
-
----
-
-## 4. Le contrat, en dur
-
-Tout driver DOIT respecter :
-
-- **`connect()`** : échouer **vite et clairement** si la liaison ne répond pas
-  (sondez `*IDN?` tôt), avec un message actionnable. Imports matériels (`pyvisa`,
-  `nidaqmx`) **paresseux** (pas requis en simulation).
-- **`close()`** : **couper les sorties** puis fermer, sans se bloquer si l'appareil
-  est muet (raccourcir le timeout). C'est un point de sûreté, pas une politesse.
-- **Détection de défaut** : signaler (défaut / `NaN`) une mesure non fiable ; ne
-  jamais renvoyer une valeur plausible fausse.
-- **Limites SOA** (`max_voltage/current/power`) renseignées depuis la datasheet —
-  elles servent à **rejeter** une config dangereuse à la validation.
-- **Aucun verrouillage** dans le driver : le contrôleur sérialise (un verrou par
-  instrument). Vos méthodes sont appelées sous ce verrou ; ne créez pas de threads.
-- **Parité simulation** : fournir/réutiliser un mock. `MockPSU`/`MockDAQ`/`MockRelay`
-  couvrent déjà les trois capacités existantes.
+Define a **thin mixin** in [instrument.py](../alim_seq/instrument.py) (methods as
+`...`, no over-abstraction), have your driver inherit it, expose it via `driver_role`,
+and have the controller iterate `isinstance(instr, MyCapability)` where relevant —
+**without breaking the lock ordering invariant** (see
+[DEVELOPMENT.md §6](DEVELOPMENT.md)).
 
 ---
 
-## 5. Tester
+## 4. The contract, spelled out
 
-- Ajoutez un test dans le fichier du module (`tests/test_psu.py`,
-  `tests/test_instrument.py`, `tests/test_relay.py`…). La suite tourne
-  **exclusivement en simulation** (ni matériel, ni réseau).
-- Vérifiez au minimum : les **capacités** exposées (`isinstance` / `capabilities_of`),
-  la **fabrique** (`create_instrument("VOTRE-DRIVER", simulate=True)` renvoie le mock),
-  et la **validation** de config (modèle connu, voies/limites cohérentes).
-- Validez **sur matériel réel** avant de proposer le driver pour un usage critique —
-  la simulation ne prouve pas le dialecte SCPI ni le comportement de sûreté réel.
+Every driver MUST respect:
+
+- **`connect()`**: fail **fast and clearly** if the link does not respond (probe
+  `*IDN?` early), with an actionable message. Hardware imports (`pyvisa`, `nidaqmx`)
+  **lazy** (not required in simulation).
+- **`close()`**: **cut off the outputs** then close, without blocking if the device is
+  mute (shorten the timeout). This is a safety point, not a courtesy.
+- **Fault detection**: report (fault / `NaN`) an unreliable measurement; never return
+  a falsely plausible value.
+- **SOA limits** (`max_voltage/current/power`) filled from the datasheet — they are
+  used to **reject** a dangerous config at validation.
+- **No locking** in the driver: the controller serializes (one lock per instrument).
+  Your methods are called under that lock; do not spawn threads.
+- **Simulation parity**: provide/reuse a mock. `MockPSU`/`MockDAQ`/`MockRelay` already
+  cover the three existing capabilities.
+
+---
+
+## 5. Testing
+
+- Add a test in the module's file (`tests/test_psu.py`, `tests/test_instrument.py`,
+  `tests/test_relay.py`…). The suite runs **exclusively in simulation** (no hardware,
+  no network).
+- Check at least: the exposed **capabilities** (`isinstance` / `capabilities_of`), the
+  **factory** (`create_instrument("YOUR-DRIVER", simulate=True)` returns the mock), and
+  config **validation** (known model, consistent channels/limits).
+- Validate **on real hardware** before proposing the driver for critical use —
+  simulation does not prove the SCPI dialect nor the real safety behavior.
 
 ```bash
 python -m pytest tests/test_instrument.py -v
@@ -242,18 +242,18 @@ python -m pytest tests/test_instrument.py -v
 
 ---
 
-## 6. Récapitulatif : intégrer un driver en 4 pas
+## 6. Summary: integrate a driver in 4 steps
 
-1. Écrire la classe (sous-classe de `BasePSU` / `BaseDAQ` / `BaseRelay` / nouvelle
-   capacité), en respectant le **contrat §4**.
-2. L'**enregistrer** (`PSU_MODELS` pour une source ; branche de `create_instrument`
-   + `available_instruments()`/`INSTRUMENTS` pour les autres familles).
-3. Assurer la **parité simulation** (réutiliser un mock existant, ou en écrire un).
-4. **Tester** en simulation, puis valider sur matériel réel.
+1. Write the class (subclass of `BasePSU` / `BaseDAQ` / `BaseRelay` / new capability),
+   respecting the **contract §4**.
+2. **Register** it (`PSU_MODELS` for a source; a branch of `create_instrument` +
+   `available_instruments()`/`INSTRUMENTS` for the other families).
+3. Ensure **simulation parity** (reuse an existing mock, or write one).
+4. **Test** in simulation, then validate on real hardware.
 
-Le reste — config, IHM, séquenceur, assistant, rapport — s'adapte **tout seul**.
+The rest — config, GUI, sequencer, wizard, report — adapts **on its own**.
 
-> Rugosité connue : enregistrer une **source** ne demande qu'une ligne dans
-> `PSU_MODELS` ; une capacité **température/actionneur** demande encore d'éditer la
-> branche correspondante de `create_instrument`. Uniformiser cela (un registre de
-> familles piloté par métadonnées) est un chantier ouvert bienvenu.
+> Known roughness: registering a **source** takes only one line in `PSU_MODELS`; a
+> **temperature/actuator** capability still requires editing the matching branch of
+> `create_instrument`. Unifying this (a metadata-driven family registry) is a welcome
+> open task.

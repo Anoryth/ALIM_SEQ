@@ -24,6 +24,8 @@ import ast
 import operator
 from typing import Callable, Set, Tuple
 
+from .i18n import _
+
 # kind transmis au résolveur pour chaque référence.
 _FUNCS = {
     "v": "V", "vset": "V",
@@ -52,7 +54,7 @@ def _parse(expr: str) -> ast.Expression:
     try:
         return ast.parse(expr, mode="eval")
     except SyntaxError as exc:
-        raise ExprError(f"expression invalide : {expr!r} ({exc.msg})") from exc
+        raise ExprError(_("invalid expression: {!r} ({})").format(expr, exc.msg)) from exc
 
 
 def references(expr: str) -> Set[str]:
@@ -71,29 +73,29 @@ def references(expr: str) -> Set[str]:
 def _walk_validate(node: ast.AST, labels: Set[str]) -> None:
     if isinstance(node, ast.BinOp):
         if type(node.op) not in _BINOPS:
-            raise ExprError(f"opérateur non autorisé : {type(node.op).__name__}")
+            raise ExprError(_("operator not allowed: {}").format(type(node.op).__name__))
         _walk_validate(node.left, labels)
         _walk_validate(node.right, labels)
     elif isinstance(node, ast.UnaryOp):
         if type(node.op) not in _UNARYOPS:
-            raise ExprError(f"opérateur unaire non autorisé : {type(node.op).__name__}")
+            raise ExprError(_("unary operator not allowed: {}").format(type(node.op).__name__))
         _walk_validate(node.operand, labels)
     elif isinstance(node, ast.Name):
         labels.add(node.id)
     elif isinstance(node, ast.Call):
-        _, label = _check_call(node)
+        _node, label = _check_call(node)
         labels.add(label)
     elif isinstance(node, ast.Constant):
         if not isinstance(node.value, (int, float)) or isinstance(node.value, bool):
-            raise ExprError(f"constante non numérique : {node.value!r}")
+            raise ExprError(_("non-numeric constant: {!r}").format(node.value))
     else:
-        raise ExprError(f"élément non autorisé dans l'expression : {type(node).__name__}")
+        raise ExprError(_("element not allowed in expression: {}").format(type(node).__name__))
 
 
 def _check_call(node: ast.Call) -> Tuple[str, str]:
     """Valide un appel fonction(label) et retourne (kind, label)."""
     if not isinstance(node.func, ast.Name):
-        raise ExprError("appel de fonction invalide")
+        raise ExprError(_("invalid function call"))
     fname = node.func.id.lower()
     if fname not in _FUNCS:
         raise ExprError(
@@ -101,7 +103,7 @@ def _check_call(node: ast.Call) -> Tuple[str, str]:
             f"Disponibles : V, Vmeas, Iset, I"
         )
     if len(node.args) != 1 or node.keywords or not isinstance(node.args[0], ast.Name):
-        raise ExprError(f"{node.func.id}(...) attend un seul nom de voie")
+        raise ExprError(_("{}(...) expects a single channel name").format(node.func.id))
     return _FUNCS[fname], node.args[0].id
 
 
@@ -123,4 +125,4 @@ def _eval(node: ast.AST, resolver: Resolver) -> float:
         return float(resolver(kind, label))
     if isinstance(node, ast.Constant):
         return float(node.value)
-    raise ExprError(f"élément non autorisé : {type(node).__name__}")
+    raise ExprError(_("element not allowed: {}").format(type(node).__name__))

@@ -1,21 +1,21 @@
 # ------------------------------------------------------------
-#  Balayage de polarisation
-#  Rampe la tension de grille ; le courant de drain suit
-#  (Id = gm·(Vgate − vth)). Attend qu'un seuil de courant soit
-#  franchi, puis coupe. Illustre RAMP et WAIT_CURRENT.
+#  Bias sweep
+#  Ramps the gate voltage; the drain current follows
+#  (Id = gm·(Vgate − vth)). Waits for a current threshold to be
+#  crossed, then switches off. Illustrates RAMP and WAIT_CURRENT.
 # ------------------------------------------------------------
 
 SET VDRAIN 12 2
 ON VDRAIN
 ON VGATE
 
-# Rampe VGATE de 0 à 6 V en 6 s, en 30 paliers.
-LOG Rampe de la grille 0 -> 6 V
+# Ramp VGATE from 0 to 6 V over 6 s, in 30 steps.
+LOG Gate ramp 0 -> 6 V
 RAMP VGATE 0 6 6 30
 
 WAIT_CURRENT VDRAIN >= 1.0 timeout=10
-LOG Courant de drain cible atteint
+LOG Target drain current reached
 
 WAIT 2
 ALL_OFF
-LOG Termine
+LOG Done

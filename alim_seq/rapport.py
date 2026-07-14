@@ -1,21 +1,22 @@
-"""Rapport d'essai, généré depuis les artefacts d'un dossier d'essai.
+"""Test report, generated from the artifacts of a test folder.
 
-Trois couches nettement séparées, aucune ne dépend de Qt :
+Three clearly separated layers, none depending on Qt:
 
-1. **Données** (pur Python) — :func:`stats_voies`, :func:`stats_capteurs`,
-   :func:`evenements`, :func:`trip_info` lisent ``essai.json``, ``mesures.csv``,
-   ``sequence.seq``, ``journal.log`` et ``config.json``. Testables sans dépendance.
-2. **Graphiques** — :func:`rendre_graphiques` (tracé V/I et températures avec
-   **matplotlib**, backend Agg, depuis le CSV → PNG). Imports locaux à la fonction.
-3. **Rendus** partageant la couche données :
-   - :func:`construire_html` — HTML autonome (aperçu navigateur), pur Python ;
-   - :func:`exporter_pdf` — PDF **via ReportLab** (pur Python, mise en page pro :
-     tableaux centrés, en-têtes colorés, pagination). Aucune dépendance à Qt.
+1. **Data** (pure Python) — :func:`stats_voies`, :func:`stats_capteurs`,
+   :func:`evenements`, :func:`trip_info` read ``essai.json``, ``mesures.csv``,
+   ``sequence.seq``, ``journal.log`` and ``config.json``. Testable with no
+   dependency.
+2. **Charts** — :func:`rendre_graphiques` (V/I and temperature plots with
+   **matplotlib**, Agg backend, from the CSV → PNG). Imports local to the function.
+3. **Renderers** sharing the data layer:
+   - :func:`construire_html` — self-contained HTML (browser preview), pure Python;
+   - :func:`exporter_pdf` — PDF **via ReportLab** (pure Python, professional layout:
+     centered tables, colored headers, pagination). No dependency on Qt.
 
-:func:`generer_rapport` orchestre le tout et écrit ``rapport.html`` + ``rapport.pdf``
-dans le dossier. Le rapport se génère TOUJOURS depuis le dossier, jamais depuis
-l'état vivant de l'IHM : il est régénérable des mois plus tard. Il n'émet AUCUN
-verdict de conformité — la conclusion est celle de l'opérateur.
+:func:`generer_rapport` orchestrates all of it and writes ``rapport.html`` +
+``rapport.pdf`` into the folder. The report is ALWAYS generated from the folder,
+never from the GUI's live state: it is regenerable months later. It issues NO
+compliance verdict — the conclusion is the operator's.
 """
 
 from __future__ import annotations
@@ -28,17 +29,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-# Palette sobre imprimable (fond blanc).
-ACCENT = "#1F4E79"        # bleu foncé : titres, filets
-ACCENT_LIGHT = "#DCE6F1"  # bleu très clair : fonds d'en-tête de tableau
+from . import i18n
+from .i18n import _
+
+# Sober, print-friendly palette (white background).
+ACCENT = "#1F4E79"        # dark blue: titles, rules
+ACCENT_LIGHT = "#DCE6F1"  # very light blue: table header backgrounds
 OK_GREEN = "#2E7D32"
 NEUTRAL = "#555555"
-DANGER = "#C62828"        # rouge : RÉSERVÉ aux événements de sécurité
-SIM_BG = "#FFF3CD"        # bandeau simulation
+DANGER = "#C62828"        # red: RESERVED for safety events
+SIM_BG = "#FFF3CD"        # simulation banner
 SIM_FG = "#7A5B00"
 
 
-# --------------------------------------------------------------------- lecture
+# --------------------------------------------------------------------- reading
 def _read_json(path: Path) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -68,7 +72,7 @@ def _finite(vals: List[float]) -> List[float]:
     return [v for v in vals if v == v and not math.isinf(v)]
 
 
-# ----------------------------------------------------------------- statistiques
+# ----------------------------------------------------------------- statistics
 def _sensor_names(header: List[str]) -> List[str]:
     return [h[:-2] for h in header if h.endswith("_C")]
 
@@ -78,12 +82,12 @@ def _channel_labels(header: List[str]) -> List[str]:
 
 
 def stats_voies(header: List[str], rows: List[List[str]]) -> Dict[str, dict]:
-    """Par voie : min/max/moyenne V et I, temps en limitation de courant (CC),
-    et consignes de début/fin d'essai.
+    """Per channel: min/max/average V and I, time in current limiting (CC),
+    and start/end setpoints of the test.
 
-    Critère CC : sortie active (``_out`` = 1) ET ``Imeas >= 0,98·Iset`` avec
-    ``Iset > 0``. Temps intégré sur le ``dt`` du CSV ; pourcentage rapporté au
-    temps de sortie active."""
+    CC criterion: active output (``_out`` = 1) AND ``Imeas >= 0.98·Iset`` with
+    ``Iset > 0``. Time integrated over the CSV's ``dt``; percentage reported over
+    the active-output time."""
     idx = {h: i for i, h in enumerate(header)}
     t_i = idx.get("t_s")
     out: Dict[str, dict] = {}
@@ -123,9 +127,9 @@ def stats_voies(header: List[str], rows: List[List[str]]) -> Dict[str, dict]:
 def stats_capteurs(header: List[str], rows: List[List[str]],
                    warnings: Dict[str, float],
                    criticals: Optional[Dict[str, float]] = None) -> Dict[str, dict]:
-    """Par capteur : min/max/moyenne °C, **excursions** (nombre de passages
-    au-dessus de l'alerte), et durées cumulées au-dessus de l'alerte ET du
-    critique (intégration sur le ``dt`` du CSV)."""
+    """Per sensor: min/max/average °C, **excursions** (number of crossings above
+    the warning threshold), and cumulated durations above the warning AND the
+    critical threshold (integration over the CSV's ``dt``)."""
     criticals = criticals or {}
     idx = {h: i for i, h in enumerate(header)}
     t_i = idx.get("t_s")
@@ -136,7 +140,7 @@ def stats_capteurs(header: List[str], rows: List[List[str]],
         warn = warnings.get(name)
         crit = criticals.get(name)
         alerte_s = crit_s = 0.0
-        count = 0            # nombre de MONTÉES au-dessus de l'alerte
+        count = 0            # number of RISES above the warning threshold
         was_over = False
         prev_t = None
         for r in rows:
@@ -169,23 +173,29 @@ def _mmm(vals: List[float]) -> Optional[Tuple[float, float, float]]:
     return (min(vals), max(vals), sum(vals) / len(vals))
 
 
-# Mots-clés d'un événement de SÉCURITÉ (ligne rouge). Partagés par la chronologie,
-# l'extraction d'événements pour les courbes et le zoom.
-_DANGER_KW = ("!!!", "DÉCLENCHEMENT", "Coupure dure", "coupure dure", "Perte", "urgence")
+# Keywords marking a SAFETY event (red line). Shared by the timeline, the event
+# extraction for the plots and the zoom. journal.log is written in whatever language
+# was active at run time, so we match the language-independent "!!!" prefix first,
+# plus both English and (legacy) French markers — reports of old FR test folders
+# stay readable.
+_DANGER_KW = ("!!!", "TRIP", "hard cut-off", "Emergency", "emergency", "lost", "Lost",
+              "DÉCLENCHEMENT", "Coupure dure", "coupure dure", "Perte", "urgence")
 
 
 def _fr(x: Optional[float], nd: int = 2) -> str:
-    """Nombre au format français (virgule décimale). '—' si None/NaN.
-    Fonction UNIQUE pour éviter de semer des replace('.', ',')."""
+    """Format a number for the active report language. '—' if None/NaN.
+    Single function so the decimal separator (comma in French, dot elsewhere) is
+    applied consistently, avoiding scattered replace('.', ',')."""
     if x is None or (isinstance(x, float) and (x != x or math.isinf(x))):
         return "—"
-    return f"{x:.{nd}f}".replace(".", ",")
+    s = f"{x:.{nd}f}"
+    return s.replace(".", ",") if i18n.current_language() == "fr" else s
 
 
 def _event_t_s(stamp: str, t0: Optional[datetime], t0_ts: float) -> Optional[float]:
-    """Temps (s) d'un horodatage de journal, recalé sur l'axe du CSV : ``t0`` est
-    l'horodatage ABSOLU de la 1re ligne du CSV, ``t0_ts`` son ``t_s``. ``stamp``
-    peut être un ISO complet (événements de sécurité) ou ``hh:mm:ss`` (journal)."""
+    """Time (s) of a log timestamp, realigned on the CSV's axis: ``t0`` is the
+    ABSOLUTE timestamp of the CSV's 1st row, ``t0_ts`` its ``t_s``. ``stamp`` can
+    be a full ISO string (safety events) or ``hh:mm:ss`` (log)."""
     if t0 is None:
         return None
     ev = _parse_iso(stamp)
@@ -196,13 +206,13 @@ def _event_t_s(stamp: str, t0: Optional[datetime], t0_ts: float) -> Optional[flo
     except (ValueError, AttributeError):
         return None
     delta = (h * 3600 + m * 60 + s) - (t0.hour * 3600 + t0.minute * 60 + t0.second)
-    if delta < -12 * 3600:            # passage de minuit
+    if delta < -12 * 3600:            # midnight rollover
         delta += 86400
     return delta + t0_ts
 
 
 def _csv_t0(header: List[str], rows: List[List[str]]):
-    """(horodatage absolu, t_s) de la 1re ligne du CSV — base de recalage."""
+    """(absolute timestamp, t_s) of the CSV's 1st row — realignment base."""
     idx = {h: i for i, h in enumerate(header)}
     hi, ti = idx.get("horodatage"), idx.get("t_s")
     if not rows or hi is None or ti is None or hi >= len(rows[0]):
@@ -211,9 +221,9 @@ def _csv_t0(header: List[str], rows: List[List[str]]):
 
 
 def evenements(dossier, header: List[str], rows: List[List[str]]) -> List[dict]:
-    """Événements horodatés du ``journal.log`` recalés sur l'axe des temps du CSV.
-    Retourne ``[{"t_s", "msg", "danger"}]`` trié. ``danger`` = événement de
-    sécurité (mêmes mots-clés que la chronologie)."""
+    """Timestamped events from ``journal.log``, realigned on the CSV's time axis.
+    Returns a sorted ``[{"t_s", "msg", "danger"}]``. ``danger`` = safety event
+    (same keywords as the timeline)."""
     jp = Path(dossier) / "journal.log"
     t0, t0_ts = _csv_t0(header, rows)
     if not jp.exists() or t0 is None:
@@ -222,7 +232,7 @@ def evenements(dossier, header: List[str], rows: List[List[str]]) -> List[dict]:
     for line in jp.read_text(encoding="utf-8").splitlines():
         if not (line.startswith("[") and "]" in line):
             continue
-        stamp, _, rest = line[1:].partition("]")
+        stamp, _mid, rest = line[1:].partition("]")
         t_s = _event_t_s(stamp.strip(), t0, t0_ts)
         if t_s is None:
             continue
@@ -234,9 +244,9 @@ def evenements(dossier, header: List[str], rows: List[List[str]]) -> List[dict]:
 
 
 def trip_info(meta: dict, header: List[str], rows: List[List[str]]) -> Optional[dict]:
-    """Si l'issue est un déclenchement de sécurité : ``{"t_s", "capteur", "cause"}``.
-    ``t_s`` = 1er événement de sécurité recalé ; ``capteur`` = nom de capteur cité
-    dans la cause (None si introuvable). Renvoie None sinon."""
+    """If the outcome is a safety trip: ``{"t_s", "capteur", "cause"}``.
+    ``t_s`` = 1st safety event, realigned; ``capteur`` = sensor name found in the
+    cause (None if not found). Returns None otherwise."""
     issue = meta.get("issue") or {}
     if issue.get("issue") != "declenchement_securite":
         return None
@@ -247,7 +257,7 @@ def trip_info(meta: dict, header: List[str], rows: List[List[str]]) -> Optional[
         if ts is not None:
             t_trip = ts
             break
-    if t_trip is None:                # repli : 1re ligne danger du journal
+    if t_trip is None:                # fallback: 1st danger line of the log
         for e in evenements("", header, rows):
             if e["danger"]:
                 t_trip = e["t_s"]
@@ -257,7 +267,7 @@ def trip_info(meta: dict, header: List[str], rows: List[List[str]]) -> Optional[
     return {"t_s": t_trip, "capteur": capteur, "cause": cause}
 
 
-# ------------------------------------------------------------------- formatage
+# ------------------------------------------------------------------- formatting
 def _esc(x) -> str:
     return html.escape("" if x is None else str(x))
 
@@ -288,32 +298,32 @@ def _mmm_cells(m: Optional[Tuple[float, float, float]], nd: int, unit: str) -> s
             f"<td align='right'>{_fr(avg, nd)}&nbsp;{unit}</td>")
 
 
-# ------------------------------------------------------------ issue / bandeaux
+# ------------------------------------------------------------ outcome / banners
 def _issue_html(meta: dict) -> str:
     issue = (meta.get("issue") or {}).get("issue", "en_cours")
     cause = (meta.get("issue") or {}).get("cause", "")
     if issue == "termine":
         return (f"<span style='color:{OK_GREEN}; font-weight:bold;'>"
-                "Terminé sans événement de sécurité</span>")
+                f"{_('Completed without safety event')}</span>")
     if issue == "arret_utilisateur":
         return (f"<span style='color:{NEUTRAL}; font-weight:bold;'>"
-                "Interrompu par l'utilisateur</span>")
+                f"{_('Interrupted by the user')}</span>")
     if issue == "declenchement_securite":
         return (f"<span style='color:{DANGER}; font-weight:bold;'>"
-                f"DÉCLENCHEMENT DE SÉCURITÉ&nbsp;: {_esc(cause)}</span>")
-    return f"<span style='color:{NEUTRAL};'>En cours</span>"
+                f"{_('SAFETY TRIP')}&nbsp;: {_esc(cause)}</span>")
+    return f"<span style='color:{NEUTRAL};'>{_('In progress')}</span>"
 
 
 def _sim_bandeau() -> str:
     return (f"<table width='100%' cellpadding='6' style='margin:6px 0;'>"
             f"<tr><td bgcolor='{SIM_BG}' align='center'>"
             f"<span style='color:{SIM_FG}; font-weight:bold;'>"
-            "⚠ ESSAI EN SIMULATION — aucun matériel réel piloté</span>"
+            f"{_('⚠ SIMULATION TEST — no real hardware driven')}</span>"
             "</td></tr></table>")
 
 
 def _section(titre: str) -> str:
-    # ``titre`` est toujours un libellé littéral (jamais une donnée utilisateur).
+    # ``titre`` is always a literal label (never user data).
     return (f"<h2 style='color:{ACCENT}; border-bottom:2px solid {ACCENT}; "
             f"padding-bottom:2px; margin-top:22px;'>{titre}</h2>")
 
@@ -323,13 +333,13 @@ def _th_row(cells: List[str]) -> str:
     return f"<tr>{tds}</tr>"
 
 
-# ------------------------------------------------------------- couche 1 (HTML)
+# ------------------------------------------------------------- layer 1 (HTML)
 def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) -> str:
-    """Construit le rapport HTML d'un dossier d'essai (pur Python, sans Qt).
+    """Builds the HTML report of a test folder (pure Python, no Qt).
 
-    ``conclusion`` : champ libre de l'opérateur (aucun verdict n'est émis par le
-    rapport lui-même). ``images`` mappe ``courbes_vi``/``courbes_temp`` vers des
-    chemins de PNG à référencer ; la fonction ne génère pas les images.
+    ``conclusion``: the operator's free-text field (the report itself issues no
+    verdict). ``images`` maps ``courbes_vi``/``courbes_temp`` to PNG paths to
+    reference; the function does not generate the images.
     """
     dossier = Path(dossier)
     meta = _read_json(dossier / "essai.json")
@@ -349,39 +359,41 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
         "td{border:1px solid #BBB; padding:3px 7px;} "
         "h1{color:%s;} .muted{color:%s;}</style></head><body>" % (ACCENT, NEUTRAL))
 
-    # --- En-tête ---
-    badge_bg, badge_txt = (SIM_BG, "SIMULATION") if sim else ("#E2EFDA", "MATÉRIEL RÉEL")
-    # Logo (copié dans le dossier par generer_rapport -> le HTML reste autonome).
+    # --- Header ---
+    badge_bg, badge_txt = (SIM_BG, _("SIMULATION")) if sim else ("#E2EFDA", _("REAL HARDWARE"))
+    # Logo (copied into the folder by generer_rapport -> the HTML stays self-contained).
     if (dossier / "logo.png").exists():
         parts.append("<p style='margin:0 0 4px;'><img src='logo.png' height='90'></p>")
     parts.append(
-        f"<h1 style='margin-bottom:2px;'>Rapport d'essai — ALIM_SEQ</h1>"
+        f"<h1 style='margin-bottom:2px;'>{_('Test report — ALIM_SEQ')}</h1>"
         f"<span style='background:{badge_bg}; padding:2px 8px; font-weight:bold;'>"
         f"{badge_txt}</span>")
     parts.append("<table width='100%' style='margin-top:10px;'>")
-    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>Nom de l'essai</b></td>"
-                 f"<td>{_esc(meta.get('nom')) or '<i>(sans nom)</i>'}</td>"
-                 f"<td bgcolor='{ACCENT_LIGHT}'><b>Opérateur</b></td>"
-                 f"<td>{_esc(meta.get('operateur')) or '<i>(non renseigné)</i>'}</td></tr>")
-    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>Début</b></td>"
+    nom_txt = _esc(meta.get('nom')) or f"<i>{_('(unnamed)')}</i>"
+    op_txt = _esc(meta.get('operateur')) or f"<i>{_('(not provided)')}</i>"
+    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>{_('Test name')}</b></td>"
+                 f"<td>{nom_txt}</td>"
+                 f"<td bgcolor='{ACCENT_LIGHT}'><b>{_('Operator')}</b></td>"
+                 f"<td>{op_txt}</td></tr>")
+    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>{_('Start')}</b></td>"
                  f"<td>{_esc(meta.get('debut'))}</td>"
-                 f"<td bgcolor='{ACCENT_LIGHT}'><b>Durée</b></td>"
+                 f"<td bgcolor='{ACCENT_LIGHT}'><b>{_('Duration')}</b></td>"
                  f"<td>{_duree(meta)}</td></tr>")
-    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>Version ALIM_SEQ</b></td>"
+    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>{_('ALIM_SEQ version')}</b></td>"
                  f"<td>{_esc(meta.get('version'))}</td>"
-                 f"<td bgcolor='{ACCENT_LIGHT}'><b>Mode</b></td>"
+                 f"<td bgcolor='{ACCENT_LIGHT}'><b>{_('Mode')}</b></td>"
                  f"<td>{badge_txt}</td></tr>")
     parts.append("</table>")
 
     if sim:
         parts.append(_sim_bandeau())
 
-    # --- Synthèse ---
-    parts.append(_section("Synthèse"))
+    # --- Summary ---
+    parts.append(_section(_("Summary")))
     sha = str(meta.get("config_sha256") or "")
     sha_short = (sha[:12] + "…") if sha else "—"
-    src = meta.get("config_source") or "configuration en mémoire (sérialisée)"
-    # Synthèse générale : nb de points, cadence effective, taille du CSV.
+    src = meta.get("config_source") or _("in-memory configuration (serialized)")
+    # General summary: number of points, actual rate, CSV size.
     idx_t = {h: i for i, h in enumerate(header)}.get("t_s")
     span = None
     if rows and idx_t is not None and idx_t < len(rows[0]) and idx_t < len(rows[-1]):
@@ -392,58 +404,60 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
     except OSError:
         csv_kio = None
     parts.append("<table width='100%'>")
-    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>Issue de l'essai</b></td>"
+    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>{_('Test outcome')}</b></td>"
                  f"<td>{_issue_html(meta)}</td></tr>")
-    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>Points de mesure</b></td>"
-                 f"<td>{len(rows)} points · {_fr(cad, 2)} pt/s"
-                 f"{'' if csv_kio is None else f' · CSV {_fr(csv_kio, 0)} Kio'}</td></tr>")
-    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>Configuration</b></td>"
+    csv_note = "" if csv_kio is None else _(" · CSV {} KiB").format(_fr(csv_kio, 0))
+    pts = _("{} points · {} pt/s").format(len(rows), _fr(cad, 2))
+    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>{_('Measurement points')}</b></td>"
+                 f"<td>{pts}{csv_note}</td></tr>")
+    parts.append(f"<tr><td bgcolor='{ACCENT_LIGHT}'><b>{_('Configuration')}</b></td>"
                  f"<td>{_esc(src)}<br><span class='muted'>SHA-256 : {_esc(sha_short)}</span></td></tr>")
     parts.append("</table>")
 
-    # --- Conclusion de l'opérateur ---
-    parts.append(_section("Conclusion de l'opérateur"))
+    # --- Operator conclusion ---
+    parts.append(_section(_("Operator conclusion")))
     if conclusion.strip():
         parts.append(f"<p style='white-space:pre-wrap;'>{_esc(conclusion)}</p>")
     else:
-        parts.append("<p class='muted'><i>(non renseignée)</i></p>")
-    # Zone de visa (les labos signent à la main).
+        parts.append(f"<p class='muted'><i>{_('(not provided)')}</i></p>")
+    # Sign-off area (labs sign it by hand).
     parts.append(
         "<table width='60%' style='margin-top:12px;'>"
-        f"<tr><td bgcolor='{ACCENT_LIGHT}' width='55%'><b>Visa opérateur</b></td>"
-        f"<td bgcolor='{ACCENT_LIGHT}'><b>Date</b></td></tr>"
+        f"<tr><td bgcolor='{ACCENT_LIGHT}' width='55%'><b>{_('Operator sign-off')}</b></td>"
+        f"<td bgcolor='{ACCENT_LIGHT}'><b>{_('Date')}</b></td></tr>"
         "<tr><td style='height:52px;'>&nbsp;</td><td>&nbsp;</td></tr></table>")
 
-    # --- Graphiques ---
+    # --- Charts ---
     if images:
-        parts.append(_section("Graphiques"))
+        parts.append(_section(_("Charts")))
         if sim:
             parts.append(_sim_bandeau())
-        captions = {"courbes": "Mesures pendant l'essai (avec événements)",
-                    "courbes_zoom": "Zoom sur le déclenchement de sécurité",
-                    "courbes_vi": "Tensions et courants", "courbes_temp": "Températures"}
+        captions = {"courbes": _("Measurements during the test (with events)"),
+                    "courbes_zoom": _("Zoom on the safety trip"),
+                    "courbes_vi": _("Voltages and currents"), "courbes_temp": _("Temperatures")}
         for key, src_img in images.items():
             if not src_img:
                 continue
             cap = captions.get(key, "")
             if cap:
                 parts.append(f"<p><b>{_esc(cap)}</b></p>")
-            # La largeur réelle est fixée à l'impression (voir exporter_pdf) ; cette
-            # valeur ne sert qu'à l'aperçu HTML dans un navigateur.
+            # The actual width is fixed at print time (see exporter_pdf); this
+            # value is only used for the HTML preview in a browser.
             parts.append(f"<p><img src='{_esc(src_img)}' width='620'></p>")
-            # Légende des repères numérotés portés sur le graphe des mesures.
+            # Legend of the numbered markers carried on the measurements chart.
             if key == "courbes":
                 parts.append(_reperes_evenements_html(dossier, header, rows))
 
-    # --- Statistiques par voie ---
-    parts.append(_section("Statistiques par voie"))
+    # --- Per-channel statistics ---
+    parts.append(_section(_("Per-channel statistics")))
     if sim:
         parts.append(_sim_bandeau())
     sv = stats_voies(header, rows)
     if sv:
         parts.append("<table width='100%'>")
-        parts.append(_th_row(["Voie", "V min", "V max", "V moy", "I min", "I max",
-                              "I moy", "Temps CC", "Consigne fin"]))
+        parts.append(_th_row([_("Channel"), _("V min"), _("V max"), _("V avg"),
+                              _("I min"), _("I max"), _("I avg"), _("CC time"),
+                              _("End setpoint")]))
         for label, s in sv.items():
             cc = "—"
             if s["cc_s"] > 0:
@@ -460,17 +474,17 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
                     cc_col, cc, cf_txt))
         parts.append("</table>")
     else:
-        parts.append("<p class='muted'>Aucune voie enregistrée.</p>")
+        parts.append(f"<p class='muted'>{_('No channel recorded.')}</p>")
 
-    # --- Statistiques par capteur ---
+    # --- Per-sensor statistics ---
     sc = stats_capteurs(header, rows, warnings, criticals)
     if sc:
-        parts.append(_section("Statistiques par capteur"))
+        parts.append(_section(_("Per-sensor statistics")))
         if sim:
             parts.append(_sim_bandeau())
         parts.append("<table width='100%'>")
-        parts.append(_th_row(["Capteur", "min", "max", "moy", "Alerte",
-                              "Excursions", "Durée &gt; alerte", "Durée &gt; critique"]))
+        parts.append(_th_row([_("Sensor"), _("min"), _("max"), _("avg"), _("Warning"),
+                              _("Excursions"), _("Time &gt; warning"), _("Time &gt; critical")]))
 
         def _dur(v):
             return f"{_fr(v, 1)}&nbsp;s" if v and v > 0 else "—"
@@ -488,26 +502,26 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
                     _dur(s["alerte_s"]), crit_col, _dur(s["critique_s"])))
         parts.append("</table>")
 
-    # --- Chronologie ---
-    parts.append(_section("Chronologie"))
+    # --- Timeline ---
+    parts.append(_section(_("Timeline")))
     parts.append(_chronologie_html(dossier, meta))
 
-    # --- Annexes ---
-    parts.append(_section("Annexe A — Séquence exécutée"))
+    # --- Appendices ---
+    parts.append(_section(_("Appendix A — Executed sequence")))
     seq = dossier / "sequence.seq"
     if seq.exists():
         parts.append("<pre style='font-family:monospace; background:#F5F5F5; "
                      "border:1px solid #DDD; padding:6px; white-space:pre-wrap;'>"
                      f"{_esc(seq.read_text(encoding='utf-8'))}</pre>")
     else:
-        parts.append("<p class='muted'>Aucune séquence (pilotage manuel).</p>")
+        parts.append(f"<p class='muted'>{_('No sequence (manual control).')}</p>")
 
-    parts.append(_section("Annexe B — Configuration"))
-    # Synthèse lisible AVANT le JSON brut.
+    parts.append(_section(_("Appendix B — Configuration")))
+    # Readable summary BEFORE the raw JSON.
     chans = cfg.get("channels") or {}
     if chans:
-        parts.append("<p><b>Voies</b></p><table width='100%'>")
-        parts.append(_th_row(["Libellé", "Alim / Canal", "V max", "I max"]))
+        parts.append(f"<p><b>{_('Channels')}</b></p><table width='100%'>")
+        parts.append(_th_row([_("Label"), _("Supply / Channel"), _("V max"), _("I max")]))
         for lbl, c in chans.items():
             if not isinstance(c, dict):
                 continue
@@ -519,8 +533,8 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
         parts.append("</table>")
     temps_cfg = cfg.get("temperatures") or {}
     if temps_cfg:
-        parts.append("<p style='margin-top:8px;'><b>Capteurs</b></p><table width='100%'>")
-        parts.append(_th_row(["Nom", "Alerte", "Critique", "Convertisseur"]))
+        parts.append(f"<p style='margin-top:8px;'><b>{_('Sensors')}</b></p><table width='100%'>")
+        parts.append(_th_row([_("Name"), _("Warning"), _("Critical"), _("Converter")]))
         for nm, t in temps_cfg.items():
             if not isinstance(t, dict):
                 continue
@@ -530,7 +544,7 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
                              _esc(nm), _fr(t.get("warning"), 0),
                              _fr(t.get("critical"), 0), _esc(conv)))
         parts.append("</table>")
-    parts.append("<p style='margin-top:8px;'><b>JSON complet</b></p>")
+    parts.append(f"<p style='margin-top:8px;'><b>{_('Full JSON')}</b></p>")
     parts.append("<pre style='font-family:monospace; background:#F5F5F5; "
                  "border:1px solid #DDD; padding:6px; white-space:pre-wrap;'>"
                  f"{_esc(json.dumps(cfg, indent=2, ensure_ascii=False))}</pre>")
@@ -540,16 +554,16 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
 
 
 def _reperes_evenements_html(dossier, header: List[str], rows: List[List[str]]) -> str:
-    """Légende des **repères numérotés** portés sur le graphe des mesures.
+    """Legend of the **numbered markers** carried on the measurements chart.
 
-    Utilise la MÊME liste (et le même ordre chronologique) que les badges du
-    graphe (:func:`evenements`) : le numéro ``n`` de la table correspond au badge
-    ``n`` du graphique. Vide s'il n'y a aucun événement."""
+    Uses the SAME list (and the same chronological order) as the chart's badges
+    (:func:`evenements`): the table's number ``n`` matches the chart's badge
+    ``n``. Empty if there is no event."""
     evs = evenements(dossier, header, rows)
     if not evs:
         return ""
-    out = ["<p class='muted' style='margin:6px 0 4px;'>Repères d'événements "
-           "(les numéros renvoient aux badges du graphe) :</p>",
+    out = [f"<p class='muted' style='margin:6px 0 4px;'>"
+           f"{_('Event markers (numbers refer to the chart badges):')}</p>",
            "<table width='100%'>"]
     for i, e in enumerate(evs, start=1):
         mm, ss = divmod(int(e["t_s"]), 60)
@@ -562,10 +576,10 @@ def _reperes_evenements_html(dossier, header: List[str], rows: List[List[str]]) 
 
 
 def _chronologie_html(dossier: Path, meta: dict) -> str:
-    """Événements du journal, horodatés en relatif au début d'essai."""
+    """Log events, timestamped relative to the start of the test."""
     jp = dossier / "journal.log"
     if not jp.exists():
-        return "<p class='muted'>Journal indisponible.</p>"
+        return f"<p class='muted'>{_('Log unavailable.')}</p>"
     debut = _parse_iso(meta.get("debut", ""))
     lines = jp.read_text(encoding="utf-8").splitlines()
     rows_html: List[str] = []
@@ -573,7 +587,7 @@ def _chronologie_html(dossier: Path, meta: dict) -> str:
         rel = ""
         msg = line
         if line.startswith("[") and "]" in line:
-            stamp, _, rest = line[1:].partition("]")
+            stamp, _mid, rest = line[1:].partition("]")
             msg = rest.strip()
             rel = _relatif(stamp.strip(), debut)
         danger = any(k in msg for k in _DANGER_KW)
@@ -581,12 +595,13 @@ def _chronologie_html(dossier: Path, meta: dict) -> str:
         rows_html.append(f"<tr><td align='right' width='90'>{_esc(rel)}</td>"
                          f"<td{col}>{_esc(msg)}</td></tr>")
     if not rows_html:
-        return "<p class='muted'>Aucun événement.</p>"
+        return f"<p class='muted'>{_('No event.')}</p>"
     return "<table width='100%'>" + "".join(rows_html) + "</table>"
 
 
 def _relatif(hms: str, debut: Optional[datetime]) -> str:
-    """Écart 'hh:mm:ss' du journal par rapport au début d'essai, en +M:SS."""
+    """'hh:mm:ss' offset of the log entry relative to the start of the test, as
+    +M:SS."""
     if debut is None:
         return hms
     try:
@@ -596,15 +611,15 @@ def _relatif(hms: str, debut: Optional[datetime]) -> str:
     log_secs = h * 3600 + m * 60 + s
     base = debut.hour * 3600 + debut.minute * 60 + debut.second
     delta = log_secs - base
-    if delta < 0:              # passage de minuit : réaligne sur 24 h
+    if delta < 0:              # midnight rollover: realigns on 24 h
         delta += 24 * 3600
     mm, ss = divmod(delta, 60)
     return f"+{mm}:{ss:02d}"
 
 
-# ------------------------------------------------------ couche 2 (Qt : graphiques + PDF)
+# ------------------------------------------------------ layer 2 (charts + PDF)
 def _series_from_csv(header, rows, suffix):
-    """Construit ``{label: [(t, valeur)]}`` depuis les colonnes en ``suffix``."""
+    """Builds ``{label: [(t, value)]}`` from the columns ending in ``suffix``."""
     idx = {h: i for i, h in enumerate(header)}
     t_i = idx.get("t_s")
     labels = [h[:-len(suffix)] for h in header if h.endswith(suffix)]
@@ -621,14 +636,14 @@ def _series_from_csv(header, rows, suffix):
 
 
 def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
-    """Trace V/I (deux cadrans empilés) et températures avec **matplotlib**
-    (backend Agg, sans fenêtre), depuis ``mesures.csv``, et écrit deux PNG dans
-    ``out_dir``. Retourne ``{"courbes_vi": nom, "courbes_temp": nom}`` (noms
-    relatifs à ``out_dir``).
+    """Plots V/I (two stacked panels) and temperatures with **matplotlib** (Agg
+    backend, no window), from ``mesures.csv``, and writes two PNGs into
+    ``out_dir``. Returns ``{"courbes_vi": name, "courbes_temp": name}`` (names
+    relative to ``out_dir``).
 
-    Utilise l'API objet ``Figure``/``FigureCanvasAgg`` (pas ``pyplot``) : pas
-    d'état global -> sûr depuis un thread worker. Si matplotlib est absent, ne
-    lève pas : retourne ``{}`` et le rapport est généré sans graphiques."""
+    Uses the ``Figure``/``FigureCanvasAgg`` object API (not ``pyplot``): no global
+    state -> safe from a worker thread. If matplotlib is absent, does not raise:
+    returns ``{}`` and the report is generated without charts."""
     try:
         from matplotlib.figure import Figure
         from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -648,22 +663,22 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     currents = _series_from_csv(header, rows, "_Imeas")
     temps = _series_from_csv(header, rows, "_C")
 
-    # Palette catégorielle FIXE, non cyclée (réf. data-viz, validée : CVD ΔE 24.2
-    # sur blanc ; le relief de contraste est porté par la légende de chaque cadran).
-    # Une entité = une couleur : un rail garde SA couleur sur les cadrans V et I.
-    # Rouge (#e34948) placé EN DERNIER : réservé au statut « critique » ci-dessous,
-    # il ne sert de couleur de série que s'il y a plus de 7 voies (cas rare).
+    # FIXED categorical palette, not cycled (data-viz reference, validated: CVD
+    # ΔE 24.2 on white; contrast relief is carried by each panel's legend).
+    # One entity = one color: a rail keeps ITS color on the V and I panels.
+    # Red (#e34948) placed LAST: reserved for the "critical" status below, it only
+    # serves as a series color if there are more than 7 channels (rare case).
     _CAT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e87ba4",
             "#eb6834", "#e34948"]
-    _MUTED = "#898781"      # encre discrète (axes, événements sans danger)
-    _WARN = "#d98c00"       # STATUT « alerte » (seuil warning) — réservé, jamais une série
-    _CRIT = "#d03b3b"       # STATUT « critique » (seuil + déclenchement) — réservé
+    _MUTED = "#898781"      # discreet ink (axes, non-danger events)
+    _WARN = "#d98c00"       # "warning" STATUS (warning threshold) — reserved, never a series
+    _CRIT = "#d03b3b"       # "critical" STATUS (threshold + trip) — reserved
     accent = "#1F4E79"
 
     def _palette(labels):
         return {lab: _CAT[i % len(_CAT)] for i, lab in enumerate(labels)}
 
-    col_ch = _palette(list(volts) or list(currents))   # partagé V <-> I (même rail)
+    col_ch = _palette(list(volts) or list(currents))   # shared V <-> I (same rail)
     col_ts = _palette(list(temps))
 
     def _xy(series, label):
@@ -684,16 +699,16 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         ax.xaxis.label.set_size(10.5)
 
     def _legend(ax, handles=None, labels=None):
-        # Légende SORTIE à droite : ne masque jamais les courbes (bbox_inches tight
-        # à l'enregistrement l'inclut sans la rogner).
+        # Legend placed OUTSIDE to the right: never hides the curves (bbox_inches
+        # tight on save includes it without cropping).
         args = (handles, labels) if handles is not None else ()
         ax.legend(*args, loc="upper left", bbox_to_anchor=(1.012, 1.0),
                   fontsize=8.5, frameon=True, framealpha=0.96, edgecolor="#d8d7d1",
                   borderaxespad=0.0, handlelength=1.6)
 
     def _trace(ax, series, colors, ylabel):
-        # Liseré blanc sous chaque trait : sépare visuellement les courbes qui se
-        # croisent (règle « anneau de surface » sur marques superposées).
+        # White outline under each stroke: visually separates crossing curves
+        # (the "surface ring" rule for overlapping marks).
         import matplotlib.patheffects as pe
         stroke = [pe.Stroke(linewidth=3.4, foreground="white", alpha=0.7), pe.Normal()]
         for label in series:
@@ -705,15 +720,15 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         if series:
             _legend(ax)
 
-    # --- Placement anti-collision des événements AVANT de dimensionner la figure.
-    # Chaque événement reçoit un numéro (ordre chronologique) reporté dans le
-    # rapport (« Repères d'événements ») : le graphe ne porte que le NUMÉRO, plus
-    # aucun texte en travers qui se chevauche.
+    # --- Anti-collision placement of events BEFORE sizing the figure.
+    # Each event gets a number (chronological order) reported in the report
+    # ("Event markers"): the chart only carries the NUMBER, no more overlapping
+    # text running across it.
     for i, e in enumerate(evs, start=1):
         e["_n"] = i
-    _allt = [t for s in (volts, currents, temps) for pts in s.values() for t, _ in pts]
+    _allt = [t for s in (volts, currents, temps) for pts in s.values() for t, _v in pts]
     t0v, t1v = (min(_allt), max(_allt)) if _allt else (0.0, 1.0)
-    min_dx = max(t1v - t0v, 1e-9) * 0.022      # deux badges plus proches -> empilés
+    min_dx = max(t1v - t0v, 1e-9) * 0.022      # two closer badges -> stacked
     ev_row: List[int] = []
     row_last: List[float] = []
     for e in evs:
@@ -727,8 +742,8 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         ev_row.append(placed)
     n_rows = max(len(row_last), 1)
 
-    # Une SEULE figure multi-panneaux : bandeau d'événements (optionnel) + V + I
-    # + températures. Axe des temps commun ; tenue sur une page dédiée du PDF.
+    # A SINGLE multi-panel figure: event strip (optional) + V + I + temperatures.
+    # Shared time axis; held on a dedicated PDF page.
     has_temp = bool(temps)
     n_panels = 3 if has_temp else 2
     strip_h = (0.34 + 0.24 * n_rows) if evs else 0.0
@@ -740,8 +755,8 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     off = 1 if evs else 0
     ax_v = fig.add_subplot(gs[off])
     ax_i = fig.add_subplot(gs[off + 1], sharex=ax_v)
-    _trace(ax_v, volts, col_ch, "Tension mesurée (V)")
-    _trace(ax_i, currents, col_ch, "Courant mesuré (A)")
+    _trace(ax_v, volts, col_ch, _("Measured voltage (V)"))
+    _trace(ax_i, currents, col_ch, _("Measured current (A)"))
     ax_v.tick_params(labelbottom=False)
     axes = [ax_v, ax_i]
 
@@ -756,27 +771,27 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
             xs, ys = _xy(temps, label)
             ax_t.plot(xs, ys, lw=2.0, solid_capstyle="round", color=col_ts[label],
                       label=label, path_effects=stroke)
-        # Seuils tracés en couleurs de STATUT (jamais la couleur d'une série) : lus
-        # comme des LIMITES. Une seule ligne par niveau distinct (dédupliqué).
+        # Thresholds plotted in STATUS colors (never a series color): read as
+        # LIMITS. One line per distinct level (deduplicated).
         for w in sorted({s[0] for s in seuils.values() if s[0] is not None}):
             ax_t.axhline(w, color=_WARN, ls="--", lw=1.0, alpha=0.85, zorder=1)
         for c in sorted({s[1] for s in seuils.values() if s[1] is not None}):
             ax_t.axhline(c, color=_CRIT, ls=":", lw=1.3, alpha=0.9, zorder=1)
-        ax_t.set_ylabel("Température (°C)")
+        ax_t.set_ylabel(_("Temperature (°C)"))
         _style(ax_t)
         from matplotlib.lines import Line2D
         h, lab = ax_t.get_legend_handles_labels()
         h += [Line2D([0], [0], color=_WARN, ls="--", lw=1.3),
               Line2D([0], [0], color=_CRIT, ls=":", lw=1.6)]
-        lab += ["seuil alerte", "seuil critique"]
+        lab += [_("warning threshold"), _("critical threshold")]
         _legend(ax_t, h, lab)
         ax_i.tick_params(labelbottom=False)
         axes.append(ax_t)
 
-    axes[-1].set_xlabel("Temps (s)")
+    axes[-1].set_xlabel(_("Time (s)"))
 
-    # Guides verticaux d'événements sur les cadrans (SANS texte) : rouge continu
-    # (sécurité) ou gris pointillé (journal), en arrière-plan.
+    # Vertical event guides on the panels (WITHOUT text): solid red (safety) or
+    # dashed grey (log), in the background.
     for ax in axes:
         for e in evs:
             if e["danger"]:
@@ -785,7 +800,7 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
                 ax.axvline(e["t_s"], color=_MUTED, ls=(0, (2, 2)), lw=0.8,
                            alpha=0.45, zorder=0)
 
-    # Bandeau d'événements : badges NUMÉROTÉS empilés pour ne jamais se chevaucher.
+    # Event strip: NUMBERED badges stacked so they never overlap.
     if evs:
         ax_ev = fig.add_subplot(gs[0], sharex=ax_v)
         ax_ev.set_ylim(-0.6, n_rows - 0.4)
@@ -803,7 +818,7 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         title_ax = ax_ev
     else:
         title_ax = ax_v
-    title_ax.set_title("Mesures pendant l'essai", fontsize=15, fontweight="bold",
+    title_ax.set_title(_("Measurements during the test"), fontsize=15, fontweight="bold",
                        color=accent, pad=10)
 
     fig.align_ylabels(axes)
@@ -813,7 +828,7 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
                 bbox_inches="tight", pad_inches=0.15)
     out = {"courbes": "courbes.png"}
 
-    # Zoom sur le déclenchement : UNIQUEMENT si issue = déclenchement de sécurité.
+    # Zoom on the trip: ONLY if the outcome is a safety trip.
     if trip and trip.get("t_s") is not None and temps:
         z = _rendre_zoom(out_dir, temps, cfg, trip)
         if z:
@@ -822,9 +837,9 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
 
 
 def _rendre_zoom(out_dir, temps, cfg, trip) -> Optional[str]:
-    """Graphique de zoom ±30 s autour du déclenchement : capteur en cause en
-    trait épais, ses seuils alerte/critique, zone critique ombrée, instant du
-    trip. Fenêtre bornée à l'essai. Écrit ``courbes_zoom.png``."""
+    """Zoom chart ±30 s around the trip: offending sensor in a thick line, its
+    warning/critical thresholds, shaded critical zone, trip instant. Window
+    bounded to the test. Writes ``courbes_zoom.png``."""
     try:
         from matplotlib.figure import Figure
         from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -837,7 +852,7 @@ def _rendre_zoom(out_dir, temps, cfg, trip) -> Optional[str]:
         return None
     lo = max(t_trip - 30, min(all_t))
     hi = min(t_trip + 30, max(all_t))
-    if hi - lo < 2:                     # essai trop court -> fenêtre nominale ±30 s
+    if hi - lo < 2:                     # test too short -> nominal ±30 s window
         lo, hi = t_trip - 30, t_trip + 30
     seuils = {n: (t.get("warning"), t.get("critical"))
               for n, t in (cfg.get("temperatures") or {}).items() if isinstance(t, dict)}
@@ -853,23 +868,23 @@ def _rendre_zoom(out_dir, temps, cfg, trip) -> Optional[str]:
         thick = (label == capteur)
         ax.plot(xs, ys, lw=(3.0 if thick else 1.2), alpha=(1.0 if thick else 0.45),
                 solid_capstyle="round",
-                label=(label + " (en cause)") if thick else label)
+                label=(label + _(" (cause)")) if thick else label)
     warn, crit = seuils.get(capteur, (None, None)) if capteur else (None, None)
-    # Couleurs de STATUT réservées (mêmes que le graphe principal).
+    # Reserved STATUS colors (same as the main chart).
     _WARN, _CRIT = "#d98c00", "#d03b3b"
     if warn is not None:
-        ax.axhline(warn, color=_WARN, ls="--", lw=1.2, label="seuil alerte")
+        ax.axhline(warn, color=_WARN, ls="--", lw=1.2, label=_("warning threshold"))
     if crit is not None:
         top = max(ax.get_ylim()[1], crit + 1)
         ax.axhspan(crit, top, color=_CRIT, alpha=0.06)
-        ax.axhline(crit, color=_CRIT, ls=":", lw=1.6, label="seuil critique")
+        ax.axhline(crit, color=_CRIT, ls=":", lw=1.6, label=_("critical threshold"))
     ax.axvline(t_trip, color=_CRIT, lw=1.8)
-    ax.annotate("déclenchement", xy=(t_trip, ax.get_ylim()[1]), xytext=(3, -2),
+    ax.annotate(_("trip"), xy=(t_trip, ax.get_ylim()[1]), xytext=(3, -2),
                 textcoords="offset points", color=_CRIT, fontsize=8, va="top")
     ax.set_xlim(lo, hi)
-    ax.set_xlabel("Temps (s)")
-    ax.set_ylabel("Température (°C)")
-    ax.set_title("Zoom sur le déclenchement", fontsize=13, fontweight="bold",
+    ax.set_xlabel(_("Time (s)"))
+    ax.set_ylabel(_("Temperature (°C)"))
+    ax.set_title(_("Zoom on the trip"), fontsize=13, fontweight="bold",
                  color="#1F4E79", pad=10)
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8, loc="best", framealpha=0.9)
@@ -880,14 +895,14 @@ def _rendre_zoom(out_dir, temps, cfg, trip) -> Optional[str]:
 
 
 def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
-    """Génère le PDF du rapport via **ReportLab** (pur Python, sans Qt).
+    """Generates the report's PDF via **ReportLab** (pure Python, no Qt).
 
-    Construit le rapport complet (en-tête, synthèse, conclusion, graphiques,
-    statistiques, chronologie, annexes) à partir des seuls artefacts du dossier
-    d'essai et des ``images`` déjà produites par :func:`rendre_graphiques`
-    (dict ``{clé: nom_de_fichier}``). Mise en page pro : tableaux centrés pleine
-    largeur, en-têtes colorés, zébrures, pied de page paginé. Lève ``RuntimeError``
-    si reportlab n'est pas installé."""
+    Builds the complete report (header, summary, conclusion, charts, statistics,
+    timeline, appendices) from the test folder's artifacts alone and the
+    ``images`` already produced by :func:`rendre_graphiques` (dict
+    ``{key: filename}``). Professional layout: centered full-width tables,
+    colored headers, zebra stripes, paginated footer. Raises ``RuntimeError`` if
+    reportlab is not installed."""
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
@@ -896,9 +911,9 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
         from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
                                         Table, TableStyle, Image, Preformatted,
                                         HRFlowable, PageBreak)
-    except ImportError as exc:  # pragma: no cover - dépend de l'environnement
-        raise RuntimeError("reportlab requis pour générer le PDF du rapport "
-                           "(pip install reportlab).") from exc
+    except ImportError as exc:  # pragma: no cover - depends on the environment
+        raise RuntimeError(_("reportlab is required to generate the report PDF "
+                             "(pip install reportlab).")) from exc
     import xml.sax.saxutils as _sx
 
     dossier, out_pdf = Path(dossier), Path(out_pdf)
@@ -936,8 +951,8 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
     story = []
 
     def section(title, new_page=False):
-        # ``new_page`` : chaque grande partie démarre en haut d'une page dédiée
-        # (page de garde = Informations + Synthèse + Conclusion regroupées).
+        # ``new_page``: each major part starts at the top of a dedicated page
+        # (cover page = Information + Summary + Conclusion grouped together).
         story.append(PageBreak() if new_page else Spacer(1, 9))
         story.append(Paragraph(esc(title), st_h2))
         story.append(HRFlowable(width="100%", thickness=1.4, color=ACC,
@@ -946,7 +961,7 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
     def sim_banner():
         if not sim:
             return
-        p = Paragraph("<b>ESSAI EN SIMULATION — aucun matériel réel piloté</b>",
+        p = Paragraph(f"<b>{_('SIMULATION TEST — no real hardware driven')}</b>",
                       ParagraphStyle("s", parent=st_b, alignment=1,
                                      textColor=colors.HexColor(SIM_FG)))
         t = Table([[p]], colWidths=[CW])
@@ -960,8 +975,8 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
                            fontName="Helvetica-Bold", fontSize=8.1, leading=9.6)
 
     def data_table(headers, data, widths, right_from=1, red_cells=()):
-        # En-têtes en Paragraph : se replient sur deux lignes plutôt que d'être
-        # tronqués quand la colonne est étroite (ex. « Durée > critique »).
+        # Headers as Paragraph: wrap onto two lines rather than being truncated
+        # when the column is narrow (e.g. "Time > critical").
         head = [Paragraph(esc(h), st_th) for h in headers]
         body = [[c if isinstance(c, Paragraph) else esc(c) for c in r] for r in data]
         t = Table([head] + body, colWidths=widths, repeatRows=1)
@@ -1002,19 +1017,19 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
         if not p.exists():
             return
         im = Image(str(p))
-        im._restrictSize(CW, 235 * mm)   # tient sur une page, jamais tronquée
+        im._restrictSize(CW, 235 * mm)   # fits on one page, never cropped
         im.hAlign = "CENTER"
         story.append(im)
         story.append(Spacer(1, 4))
 
-    # ---- En-tête ----
+    # ---- Header ----
     if (dossier / "logo.png").exists():
         logo = Image(str(dossier / "logo.png"))
         logo._restrictSize(60 * mm, 22 * mm)
         logo.hAlign = "LEFT"
         story.append(logo)
-    story.append(Paragraph("Rapport d'essai — ALIM_SEQ", st_h1))
-    badge_txt = "SIMULATION" if sim else "MATÉRIEL RÉEL"
+    story.append(Paragraph(_("Test report — ALIM_SEQ"), st_h1))
+    badge_txt = _("SIMULATION") if sim else _("REAL HARDWARE")
     badge = Table([[Paragraph(f"<b>{badge_txt}</b>", ParagraphStyle(
         "bd", parent=st_b, textColor=colors.white, fontSize=8.5))]],
         colWidths=[len(badge_txt) * 5.6 + 18])
@@ -1027,13 +1042,13 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
     story.append(Spacer(1, 3))
     story.append(badge)
 
-    # ---- Informations ----
-    section("Informations")
+    # ---- Information ----
+    section(_("Information"))
     info = [
-        ["Nom de l'essai", meta.get("nom") or "(sans nom)",
-         "Opérateur", meta.get("operateur") or "(non renseigné)"],
-        ["Début", meta.get("debut", ""), "Durée", _duree(meta)],
-        ["Version ALIM_SEQ", meta.get("version", ""), "Mode", badge_txt],
+        [_("Test name"), meta.get("nom") or _("(unnamed)"),
+         _("Operator"), meta.get("operateur") or _("(not provided)")],
+        [_("Start"), meta.get("debut", ""), _("Duration"), _duree(meta)],
+        [_("ALIM_SEQ version"), meta.get("version", ""), _("Mode"), badge_txt],
     ]
     it = Table([[esc(a), esc(b), esc(c), esc(d)] for a, b, c, d in info],
                colWidths=[CW * x for x in (0.18, 0.32, 0.18, 0.32)])
@@ -1050,20 +1065,20 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
     ]))
     story.append(it)
 
-    # ---- Synthèse ----
-    section("Synthèse")
+    # ---- Summary ----
+    section(_("Summary"))
     sim_banner()
     issue = (meta.get("issue") or {}).get("issue", "en_cours")
     cause = (meta.get("issue") or {}).get("cause", "")
     if issue == "termine":
-        colored_box("<b>Issue : Terminé sans événement de sécurité</b>", OK_GREEN, "#EAF5EA")
+        colored_box(f"<b>{_('Outcome: Completed without safety event')}</b>", OK_GREEN, "#EAF5EA")
     elif issue == "arret_utilisateur":
-        colored_box("<b>Issue : Interrompu par l'utilisateur</b>", NEUTRAL, "#F0F0F0")
+        colored_box(f"<b>{_('Outcome: Interrupted by the user')}</b>", NEUTRAL, "#F0F0F0")
     elif issue == "declenchement_securite":
-        colored_box(f"<b>Issue : DÉCLENCHEMENT DE SÉCURITÉ : {esc(cause)}</b>",
+        colored_box(f"<b>{_('Outcome: SAFETY TRIP:')} {esc(cause)}</b>",
                     DANGER, "#FDECEC")
     else:
-        colored_box("<b>Issue : En cours</b>", NEUTRAL, "#F0F0F0")
+        colored_box(f"<b>{_('Outcome: In progress')}</b>", NEUTRAL, "#F0F0F0")
     idx_t = {h: i for i, h in enumerate(header)}.get("t_s")
     span = None
     if rows and idx_t is not None and idx_t < len(rows[0]) and idx_t < len(rows[-1]):
@@ -1075,22 +1090,23 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
         csv_kio = None
     sha = str(meta.get("config_sha256") or "")
     sha_short = (sha[:12] + "…") if sha else "—"
-    src = meta.get("config_source") or "configuration en mémoire (sérialisée)"
+    src = meta.get("config_source") or _("in-memory configuration (serialized)")
     story.append(Spacer(1, 4))
-    pts = (f"{len(rows)} points · {_fr(cad, 2)} pt/s"
-           + ("" if csv_kio is None else f" · CSV {_fr(csv_kio, 0)} Kio"))
-    story.append(Paragraph(f"<b>Points de mesure :</b> {esc(pts)}", st_b))
-    story.append(Paragraph(f"<b>Configuration :</b> {esc(src)} "
+    pts = (_("{} points · {} pt/s").format(len(rows), _fr(cad, 2))
+           + ("" if csv_kio is None else _(" · CSV {} KiB").format(_fr(csv_kio, 0))))
+    story.append(Paragraph(f"<b>{_('Measurement points:')}</b> {esc(pts)}", st_b))
+    story.append(Paragraph(f"<b>{_('Configuration:')}</b> {esc(src)} "
                            f"<font color='#6b6b6b'>(SHA-256 : {esc(sha_short)})</font>", st_b))
 
-    # ---- Conclusion de l'opérateur ----
-    section("Conclusion de l'opérateur")
+    # ---- Operator conclusion ----
+    section(_("Operator conclusion"))
     if conclusion.strip():
         story.append(Paragraph(esc(conclusion).replace("\n", "<br/>"), st_b))
     else:
-        story.append(Paragraph("<i>(non renseignée)</i>", st_m))
+        story.append(Paragraph(f"<i>{_('(not provided)')}</i>", st_m))
     story.append(Spacer(1, 8))
-    visa = Table([[Paragraph("<b>Visa opérateur</b>", st_b), Paragraph("<b>Date</b>", st_b)],
+    visa = Table([[Paragraph(f"<b>{_('Operator sign-off')}</b>", st_b),
+                   Paragraph(f"<b>{_('Date')}</b>", st_b)],
                   ["", ""]], colWidths=[CW * 0.4, CW * 0.2], rowHeights=[None, 46])
     visa.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(ACCENT_LIGHT)),
@@ -1102,16 +1118,16 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
     visa.hAlign = "LEFT"
     story.append(visa)
 
-    # ---- Graphiques ----
+    # ---- Charts ----
     if images:
-        section("Mesures pendant l'essai", new_page=True)
+        section(_("Measurements during the test"), new_page=True)
         sim_banner()
         if images.get("courbes"):
             image_flow(images["courbes"])
             evs = evenements(dossier, header, rows)
             if evs:
-                story.append(Paragraph("Repères d'événements (les numéros renvoient "
-                                       "aux badges du graphe) :", st_m))
+                story.append(Paragraph(_("Event markers (numbers refer to the chart "
+                                         "badges):"), st_m))
                 ev_data, red = [], []
                 for i, e in enumerate(evs):
                     mm2, ss = divmod(int(e["t_s"]), 60)
@@ -1120,7 +1136,7 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
                                     Paragraph(esc(e["msg"]), style)])
                     if e["danger"]:
                         red.append((i, 1))
-                story.append(data_table(["N°", "Temps", "Événement"], ev_data,
+                story.append(data_table([_("No."), _("Time"), _("Event")], ev_data,
                                         [CW * 0.07, CW * 0.11, CW * 0.82],
                                         right_from=99, red_cells=red))
         if images.get("courbes_zoom"):
@@ -1133,8 +1149,8 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
         return [f"{_fr(m[0], nd)} {unit}", f"{_fr(m[1], nd)} {unit}",
                 f"{_fr(m[2], nd)} {unit}"]
 
-    # ---- Statistiques par voie ----
-    section("Statistiques par voie", new_page=True)
+    # ---- Per-channel statistics ----
+    section(_("Per-channel statistics"), new_page=True)
     sim_banner()
     sv = stats_voies(header, rows)
     if sv:
@@ -1151,18 +1167,18 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
             data.append([label, *_mmm3(s["v"], 3, "V"), *_mmm3(s["i"], 3, "A"), cc, cf_txt])
         w = [CW * x for x in (.10, .108, .108, .108, .108, .108, .108, .12, .132)]
         story.append(data_table(
-            ["Voie", "V min", "V max", "V moy", "I min", "I max", "I moy",
-             "Temps CC", "Consigne fin"], data, w, red_cells=red))
+            [_("Channel"), _("V min"), _("V max"), _("V avg"), _("I min"), _("I max"),
+             _("I avg"), _("CC time"), _("End setpoint")], data, w, red_cells=red))
         story.append(Paragraph(
-            "« Temps CC » = durée passée en limitation de courant (mode CC) ; "
-            "« Consigne fin » = tension / courant demandés en fin d'essai.", st_m))
+            _("“CC time” = time spent in current limiting (CC mode); "
+              "“End setpoint” = voltage / current requested at end of test."), st_m))
     else:
-        story.append(Paragraph("Aucune voie enregistrée.", st_m))
+        story.append(Paragraph(_("No channel recorded."), st_m))
 
-    # ---- Statistiques par capteur ----
+    # ---- Per-sensor statistics ----
     sc = stats_capteurs(header, rows, warnings, criticals)
     if sc:
-        section("Statistiques par capteur", new_page=True)
+        section(_("Per-sensor statistics"), new_page=True)
         sim_banner()
 
         def _dur(v):
@@ -1178,15 +1194,15 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
                          _dur(s["alerte_s"]), _dur(s["critique_s"])])
         w = [CW * x for x in (.15, .105, .105, .105, .11, .14, .13, .155)]
         story.append(data_table(
-            ["Capteur", "min", "max", "moy", "Seuil alerte", "Dépassements",
-             "Durée > alerte", "Durée > critique"], data, w, red_cells=red))
+            [_("Sensor"), _("min"), _("max"), _("avg"), _("Warning threshold"),
+             _("Excursions"), _("Time > warning"), _("Time > critical")], data, w, red_cells=red))
         story.append(Paragraph(
-            "« Dépassements » = nombre de fois où la température a franchi le seuil "
-            "d'alerte (montées) ; les durées sont cumulées sur la totalité de l'essai.",
+            _("“Excursions” = number of times the temperature crossed the warning "
+              "threshold (rises); durations are cumulative over the whole test."),
             st_m))
 
-    # ---- Chronologie ----
-    section("Chronologie", new_page=True)
+    # ---- Timeline ----
+    section(_("Timeline"), new_page=True)
     debut = _parse_iso(meta.get("debut", ""))
     jp = dossier / "journal.log"
     chr_rows = []
@@ -1194,60 +1210,60 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
         for line in jp.read_text(encoding="utf-8").splitlines():
             rel, msg = "", line
             if line.startswith("[") and "]" in line:
-                stamp, _, rest = line[1:].partition("]")
+                stamp, _mid, rest = line[1:].partition("]")
                 msg = rest.strip()
                 rel = _relatif(stamp.strip(), debut)
             danger = any(k in msg for k in _DANGER_KW)
             chr_rows.append([rel, Paragraph(esc(msg), st_cell_d if danger else st_cell)])
     if chr_rows:
-        story.append(data_table(["Temps", "Événement"], chr_rows,
+        story.append(data_table([_("Time"), _("Event")], chr_rows,
                                 [CW * 0.12, CW * 0.88], right_from=99))
     else:
-        story.append(Paragraph("Aucun événement.", st_m))
+        story.append(Paragraph(_("No event."), st_m))
 
-    # ---- Annexe A — Séquence ----
-    section("Annexe A — Séquence exécutée", new_page=True)
+    # ---- Appendix A — Sequence ----
+    section(_("Appendix A — Executed sequence"), new_page=True)
     seq = dossier / "sequence.seq"
     if seq.exists():
         story.append(Preformatted(seq.read_text(encoding="utf-8"), st_mono))
     else:
-        story.append(Paragraph("Aucune séquence (pilotage manuel).", st_m))
+        story.append(Paragraph(_("No sequence (manual control)."), st_m))
 
-    # ---- Annexe B — Configuration ----
-    section("Annexe B — Configuration", new_page=True)
+    # ---- Appendix B — Configuration ----
+    section(_("Appendix B — Configuration"), new_page=True)
     chans = cfg.get("channels") or {}
     if chans:
-        story.append(Paragraph("<b>Voies</b>", st_b))
+        story.append(Paragraph(f"<b>{_('Channels')}</b>", st_b))
         data = [[lbl, f"{c.get('supply')} / {c.get('channel')}",
                  f"{_fr(c.get('max_voltage'), 1)} V", f"{_fr(c.get('max_current'), 3)} A"]
                 for lbl, c in chans.items() if isinstance(c, dict)]
-        story.append(data_table(["Libellé", "Alim / Canal", "V max", "I max"], data,
+        story.append(data_table([_("Label"), _("Supply / Channel"), _("V max"), _("I max")], data,
                                 [CW * 0.25, CW * 0.35, CW * 0.2, CW * 0.2], right_from=2))
     tcfg = cfg.get("temperatures") or {}
     if tcfg:
         story.append(Spacer(1, 6))
-        story.append(Paragraph("<b>Capteurs</b>", st_b))
+        story.append(Paragraph(f"<b>{_('Sensors')}</b>", st_b))
         data = [[nm, f"{_fr(t.get('warning'), 0)} °C", f"{_fr(t.get('critical'), 0)} °C",
                  (t.get("converter") or {}).get("type", "identity")]
                 for nm, t in tcfg.items() if isinstance(t, dict)]
-        story.append(data_table(["Nom", "Alerte", "Critique", "Convertisseur"], data,
+        story.append(data_table([_("Name"), _("Warning"), _("Critical"), _("Converter")], data,
                                 [CW * 0.28, CW * 0.2, CW * 0.2, CW * 0.32], right_from=1))
     story.append(Spacer(1, 6))
-    story.append(Paragraph("<b>JSON complet</b>", st_b))
+    story.append(Paragraph(f"<b>{_('Full JSON')}</b>", st_b))
     story.append(Preformatted(json.dumps(cfg, indent=2, ensure_ascii=False), st_mono))
 
-    # ---- Assemblage : canvas numéroté (pied « page X / N » + en-tête courant) ----
+    # ---- Assembly: numbered canvas (footer "page X / N" + running header) ----
     from . import __version__
     from reportlab.pdfgen import canvas as _canvas
 
     nom_essai = meta.get("nom") or ""
-    # Version citée = celle qui a PRODUIT l'essai (cohérente avec l'encart
-    # « Version ALIM_SEQ »), sinon la version courante de l'outil.
+    # Cited version = the one that PRODUCED the test (consistent with the
+    # "ALIM_SEQ version" box), otherwise the tool's current version.
     version_str = meta.get("version") or __version__
 
     class _NumberedCanvas(_canvas.Canvas):
-        """Canvas à deux passes : connaît le nombre TOTAL de pages (pour « X / N »)
-        et pose un en-tête courant sur les pages ≥ 2."""
+        """Two-pass canvas: knows the TOTAL page count (for "X / N") and lays
+        out a running header on pages ≥ 2."""
 
         def __init__(self, *a, **k):
             super().__init__(*a, **k)
@@ -1270,11 +1286,12 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
             self.setFont("Helvetica", 8)
             self.drawCentredString(
                 A4[0] / 2, 9 * mm,
-                f"ALIM_SEQ v{version_str} — page {self._pageNumber} / {total}")
-            if self._pageNumber > 1:      # en-tête courant (pas sur la page de garde)
+                _("ALIM_SEQ v{} — page {} / {}").format(
+                    version_str, self._pageNumber, total))
+            if self._pageNumber > 1:      # running header (not on the cover page)
                 self.setFont("Helvetica", 7.5)
                 self.setFillColor(colors.HexColor("#a0a09a"))
-                self.drawString(15 * mm, A4[1] - 8 * mm, "Rapport d'essai — ALIM_SEQ")
+                self.drawString(15 * mm, A4[1] - 8 * mm, _("Test report — ALIM_SEQ"))
                 if nom_essai:
                     self.drawRightString(A4[0] - 15 * mm, A4[1] - 8 * mm, nom_essai)
                 self.setStrokeColor(colors.HexColor("#E0E0E0"))
@@ -1283,13 +1300,13 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
 
     doc = SimpleDocTemplate(str(out_pdf), pagesize=A4, topMargin=16 * mm,
                             bottomMargin=15 * mm, leftMargin=15 * mm, rightMargin=15 * mm,
-                            title="Rapport d'essai — ALIM_SEQ")
+                            title=_("Test report — ALIM_SEQ"))
     doc.build(story, canvasmaker=_NumberedCanvas)
 
 
 def _logo_source() -> Optional[Path]:
-    """Chemin du logo (en-tête du rapport) : bundle PyInstaller ou arborescence
-    source (``packaging/logo.png``). Résolu comme l'icône de l'application."""
+    """Path of the logo (report header): PyInstaller bundle or source tree
+    (``packaging/logo.png``). Resolved like the application's icon."""
     import sys
     cands = []
     mp = getattr(sys, "_MEIPASS", None)
@@ -1300,13 +1317,13 @@ def _logo_source() -> Optional[Path]:
 
 
 def generer_rapport(dossier, conclusion=None):
-    """Génère ``rapport.html`` + ``rapport.pdf`` DANS le dossier d'essai, à partir
-    de ses seuls artefacts (régénérable). ``conclusion`` (str) est persistée dans
-    ``essai.json`` pour les régénérations ultérieures ; ``None`` réutilise celle
-    déjà stockée. Retourne le chemin du PDF."""
+    """Generates ``rapport.html`` + ``rapport.pdf`` INTO the test folder, from its
+    artifacts alone (regenerable). ``conclusion`` (str) is persisted in
+    ``essai.json`` for later regenerations; ``None`` reuses the one already
+    stored. Returns the PDF's path."""
     dossier = Path(dossier)
     meta = _read_json(dossier / "essai.json")
-    # Copie le logo DANS le dossier -> le HTML reste autonome (aucune réf externe).
+    # Copies the logo INTO the folder -> the HTML stays self-contained (no external ref).
     src_logo = _logo_source()
     if src_logo is not None and not (dossier / "logo.png").exists():
         try:

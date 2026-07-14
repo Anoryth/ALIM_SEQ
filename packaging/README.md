@@ -1,40 +1,41 @@
-# Installateur Windows — ALIM_SEQ
+# Windows installer — ALIM_SEQ
 
-Produit deux livrables :
+Produces two deliverables:
 
-- **`dist\ALIM_SEQ.exe`** — exécutable **portable** (un seul fichier, IHM Qt, aucune
-  installation de Python requise).
-- **`packaging\Output\ALIM_SEQ-Setup.exe`** — **installateur** avec raccourcis
-  menu Démarrer / bureau et désinstallateur.
+- **`dist\ALIM_SEQ.exe`** — **portable** executable (single file, Qt GUI, no Python
+  installation required).
+- **`packaging\Output\ALIM_SEQ-Setup.exe`** — **installer** with Start menu / desktop
+  shortcuts and an uninstaller.
 
-## Choix admin / sans droits admin
-L'installateur demande au démarrage le mode d'installation :
+## Admin / non-admin choice
+The installer asks for the install mode at startup:
 
-- **Tous les utilisateurs** (droits **admin**) → installé dans *Program Files* ;
-- **Cet utilisateur uniquement** (**sans admin**) → installé dans
-  `%LOCALAPPDATA%\Programs`.
+- **All users** (**admin** rights) → installed in *Program Files*;
+- **This user only** (**no admin**) → installed in `%LOCALAPPDATA%\Programs`.
 
-Dans les deux cas, la **configuration éditée et les journaux** sont écrits dans un
-dossier **inscriptible** par utilisateur : `%LOCALAPPDATA%\ALIM_SEQ` (semé au
-premier lancement avec `config.json` et `sequences/` par défaut). L'installation
-en lecture seule (Program Files) fonctionne donc sans souci.
+In both cases, the **edited configuration and the logs** are written in a per-user
+**writable** folder: `%LOCALAPPDATA%\ALIM_SEQ` (seeded on first launch with the default
+`config.json` and `sequences/`). A read-only installation (Program Files) therefore
+works without any issue.
 
-## Construire (recommandé : CI, sur un vrai Windows)
-Le workflow **GitHub Actions** [`.github/workflows/windows-build.yml`](../.github/workflows/windows-build.yml)
-construit tout sur `windows-latest` et publie les artefacts :
-- lancer *Actions → Build Windows installer → Run workflow*, ou pousser un tag `vX.Y.Z`.
+## Building (recommended: CI, on a real Windows)
+The **GitHub Actions** workflow [`.github/workflows/windows-build.yml`](../.github/workflows/windows-build.yml)
+builds everything on `windows-latest` and publishes the artifacts:
+- run *Actions → Build Windows installer → Run workflow*, or push a `vX.Y.Z` tag.
 
-## Construire en local (Windows)
-Prérequis : **Python 3.10+** et **Inno Setup 6** (https://jrsoftware.org/isdl.php).
+## Building locally (Windows)
+Requirements: **Python 3.10+** and **Inno Setup 6** (https://jrsoftware.org/isdl.php).
 ```bat
 packaging\build_windows.bat
 ```
-(installe PySide6/pyvisa/pyinstaller dans un venv, lance PyInstaller puis Inno Setup.)
+(installs PySide6/pyvisa/pyinstaller in a venv, runs PyInstaller then Inno Setup.)
 
 ## Notes
-- **NI-DAQmx** (acquisition température en mode réel) n'est **pas** embarqué : il
-  requiert le runtime NI installé séparément. L'app démarre et fonctionne sans
-  (l'acquisition NI est alors indisponible, message explicite).
-- VISA : `pyvisa` + `pyvisa-py` (pur Python) sont inclus. Pour de meilleures perfs
-  matériel, installer une VISA système (NI-VISA / Keysight IO Libraries).
-- Icône : déposez `packaging\icon.ico` pour personnaliser l'exe (optionnel).
+- **NI-DAQmx** (temperature acquisition in real mode) is **not** bundled: it requires
+  the NI runtime installed separately. The app starts and works without it (NI
+  acquisition is then unavailable, with an explicit message).
+- VISA: `pyvisa` + `pyvisa-py` (pure Python) are included. For better hardware
+  performance, install a system VISA (NI-VISA / Keysight IO Libraries).
+- Translations: the compiled catalogs (`.qm`/`.mo`) are bundled; run
+  `python tools\compile_catalogs.py` before building (the CI does this automatically).
+- Icon: drop `packaging\icon.ico` to customize the exe (optional).

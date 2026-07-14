@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from .instrument import Actionneur, Instrument
+from .i18n import _
 
 
 class BaseRelay(Instrument, Actionneur):
@@ -70,7 +71,7 @@ class MockRelay(BaseRelay):
 
     def set_state(self, label: str, on: bool) -> None:
         if label not in self._state:
-            raise KeyError(f"Sortie de relais inconnue : {label!r}")
+            raise KeyError(_("Unknown relay output: {!r}").format(label))
         self._state[label] = bool(on)
 
     def get_state(self, label: str) -> Optional[bool]:

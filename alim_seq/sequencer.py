@@ -1,50 +1,54 @@
-"""Séquenceur : analyse et exécution d'un fichier de séquence.
+"""Sequencer: parses and runs a sequence file.
 
-Format du fichier : une **action par ligne**. Les lignes vides et celles
-commençant par ``#`` (ou ``//``) sont ignorées. Les mots-clés sont insensibles
-à la casse ; les *labels* de voies et noms de capteurs respectent la casse de la
-configuration.
+File format: **one action per line**. Empty lines and those starting with ``#``
+(or ``//``) are ignored. Keywords are case-insensitive; channel *labels* and
+sensor names respect the configuration's case.
 
-Commandes disponibles
----------------------
-    SET <voie> <tension_V> [courant_A]   Règle tension (et limite courant).
-    VOLTAGE <voie> <tension_V>           Règle uniquement la tension.
-    CURRENT <voie> <courant_A>           Règle uniquement la limite de courant.
-    SETV <voie> = <expression>           Règle la tension à partir d'une formule
-                                         (ex: SETV VG2 = (VD/2)+VG1). Un nom de
-                                         voie = sa consigne de tension ; fonctions
-                                         V(x), Vmeas(x), Iset(x), I(x) disponibles.
-    SETI <voie> = <expression>           Idem pour la limite de courant.
-    ON <voie>                            Allume la voie.
-    OFF <voie>                           Éteint la voie.
-    WAIT <secondes>                      Pause (interruptible).
-    RAMP <voie> <v_fin> <duree_s>                   Rampe DEPUIS la valeur
-                                         actuelle de la voie jusqu'à <v_fin>.
-    RAMP <voie> <v_debut> <v_fin> <duree_s> [pas]   Rampe avec départ explicite.
-                                         [pas] = NOMBRE de pas (entier >= 2), pas
-                                         une taille de pas.
-    SERVO_LIN <voie_reglee> <voie_mesuree> <courant_cible_A> [clé=valeur ...]
-                                         Asservit la tension de <voie_reglee>
-                                         jusqu'au courant cible sur <voie_mesuree>,
-                                         à PAS FIXE (|step| par itération).
-                                         Clés: step, min, max, tol, timeout, settle,
-                                         invert. ('SERVO' = alias de SERVO_LIN.)
-    SERVO_ADAPT <voie_reglee> <voie_mesuree> <courant_cible_A> [clé=valeur ...]
-                                         Idem mais à PAS ADAPTATIF (sécante/Newton :
-                                         pente dI/dV mesurée -> grand loin, fin près).
-                                         'step' devient un PLAFOND. Clé en plus:
-                                         damping (défaut 0.7).
-    WAIT_CURRENT <voie> <op> <valeur> [timeout=<s>]   Attend une condition courant.
-    WAIT_TEMP <capteur> <op> <valeur> [timeout=<s>]   Attend une condition temp.
+Available commands
+-------------------
+    SET <channel> <voltage_V> [current_A]  Sets the voltage (and current limit).
+    VOLTAGE <channel> <voltage_V>          Sets the voltage only.
+    CURRENT <channel> <current_A>          Sets the current limit only.
+    SETV <channel> = <expression>          Sets the voltage from a formula
+                                         (e.g. SETV VG2 = (VD/2)+VG1). A bare
+                                         channel name = its voltage setpoint;
+                                         functions V(x), Vmeas(x), Iset(x), I(x)
+                                         available.
+    SETI <channel> = <expression>          Same for the current limit.
+    ON <channel>                           Switches the channel on.
+    OFF <channel>                          Switches the channel off.
+    WAIT <seconds>                         Pause (interruptible).
+    RAMP <channel> <v_end> <duration_s>                Ramp FROM the channel's
+                                         current value to <v_end>.
+    RAMP <channel> <v_start> <v_end> <duration_s> [steps]  Ramp with explicit
+                                         start. [steps] = NUMBER of steps
+                                         (integer >= 2), not a step size.
+    SERVO_LIN <set_channel> <measured_channel> <target_current_A> [key=value ...]
+                                         Servos the voltage of <set_channel>
+                                         until the target current is reached on
+                                         <measured_channel>, at a FIXED STEP
+                                         (|step| per iteration). Keys: step, min,
+                                         max, tol, timeout, settle, invert.
+                                         ('SERVO' = alias for SERVO_LIN.)
+    SERVO_ADAPT <set_channel> <measured_channel> <target_current_A> [key=value ...]
+                                         Same but with an ADAPTIVE STEP
+                                         (secant/Newton: measured slope dI/dV ->
+                                         large far, fine near). 'step' becomes a
+                                         CEILING. Extra key: damping (default 0.7).
+    WAIT_CURRENT <channel> <op> <value> [timeout=<s>]  Waits for a current
+                                         condition.
+    WAIT_TEMP <sensor> <op> <value> [timeout=<s>]      Waits for a temperature
+                                         condition.
                                          op ∈ { < <= > >= == != }
-    LOG <message...>                     Écrit un message dans le journal.
-    ALL_OFF                              Éteint toutes les voies.
-    RELAY <sortie> ON|OFF                Ferme (ON) / ouvre (OFF) une sortie de relais.
-    REPEAT <n>  …  END                   Répète n fois le bloc (imbrication OK).
+    LOG <message...>                       Writes a message to the log.
+    ALL_OFF                                Switches off all channels.
+    RELAY <output> ON|OFF                  Closes (ON) / opens (OFF) a relay
+                                         output.
+    REPEAT <n>  …  END                     Repeats the block n times (nesting OK).
 
-Exemple
+Example
 -------
-    # Mise sous tension
+    # Power-up
     SET VCC 3.3 1.0
     ON VCC
     WAIT 1.0
@@ -61,8 +65,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, List, Optional, Set
 
 from .expressions import ExprError, references
+from .i18n import _
 
-if TYPE_CHECKING:  # évite un cycle d'import (controller importe sequencer)
+if TYPE_CHECKING:  # avoids an import cycle (controller imports sequencer)
     from .controller import Controller
 
 _OPS = {
@@ -76,17 +81,17 @@ _OPS = {
 
 
 class SequenceError(Exception):
-    """Erreur de syntaxe/validation dans le fichier de séquence."""
+    """Syntax/validation error in the sequence file."""
 
 
 @dataclass
 class Action:
-    """Une action de séquence analysée.
+    """A parsed sequence action.
 
-    ``lineno`` = ligne source (conservée après expansion des boucles, pour le
-    surlignage de l'éditeur) ; ``cmd`` = mot-clé en MAJUSCULES ; ``args`` = les
-    arguments bruts (str, convertis à l'exécution) ; ``raw`` = la ligne d'origine
-    (affichée dans le journal)."""
+    ``lineno`` = source line (kept after loop expansion, for the editor's
+    highlighting); ``cmd`` = UPPERCASE keyword; ``args`` = the raw arguments
+    (str, converted at execution time); ``raw`` = the original line (shown in
+    the log)."""
     lineno: int
     cmd: str
     args: List[str]
@@ -100,13 +105,13 @@ def parse_sequence(
     valid_sensors: Set[str],
     valid_relays: Set[str] = frozenset(),
 ) -> List[Action]:
-    """Analyse le texte d'une séquence et valide les références (voies/capteurs/relais)."""
+    """Parses a sequence's text and validates the references (channels/sensors/relays)."""
     actions: List[Action] = []
     for i, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or stripped.startswith("//"):
             continue
-        # On retire un éventuel commentaire en fin de ligne.
+        # Strips an optional trailing comment.
         for marker in ("#", "//"):
             if marker in stripped and not stripped.upper().startswith("LOG"):
                 stripped = stripped.split(marker, 1)[0].strip()
@@ -120,10 +125,10 @@ def parse_sequence(
 
 
 def _expand_loops(actions: List[Action]) -> List[Action]:
-    """Déroule les blocs ``REPEAT n … END`` (imbrications gérées) en une liste plate.
+    """Unrolls ``REPEAT n … END`` blocks (nesting handled) into a flat list.
 
-    Les actions conservent leur ``lineno`` source (le surlignage de l'éditeur reste
-    correct). Garde-fou contre une expansion démesurée.
+    The actions keep their source ``lineno`` (the editor's highlighting stays
+    correct). Guard against a runaway expansion.
     """
     stack: List[List[Action]] = [[]]
     counts: List[int] = []
@@ -133,23 +138,23 @@ def _expand_loops(actions: List[Action]) -> List[Action]:
             counts.append(int(a.args[0]))
         elif a.cmd == "END":
             if len(stack) == 1:
-                raise SequenceError(f"Ligne {a.lineno}: 'END' sans 'REPEAT' correspondant.")
+                raise SequenceError(_("Line {}: 'END' without matching 'REPEAT'.").format(a.lineno))
             block, n = stack.pop(), counts.pop()
             stack[-1].extend(block * n)
             if len(stack[-1]) > 200000:
-                raise SequenceError("Séquence trop longue après expansion des boucles "
-                                    "(REPEAT trop grand).")
+                raise SequenceError(_("Sequence too long after loop expansion "
+                                      "(REPEAT too large)."))
         else:
             stack[-1].append(a)
     if len(stack) != 1:
-        raise SequenceError("'REPEAT' sans 'END' correspondant.")
+        raise SequenceError(_("'REPEAT' without matching 'END'."))
     return stack[0]
 
 
 def estimate_duration(actions: List[Action]) -> float:
-    """Durée minimale estimée (s) : somme des WAIT/DELAY et des durées de RAMP.
+    """Estimated minimum duration (s): sum of the WAIT/DELAY and RAMP durations.
 
-    Les SERVO / WAIT_CURRENT / WAIT_TEMP (durée non bornée) ne sont pas comptés."""
+    SERVO / WAIT_CURRENT / WAIT_TEMP (unbounded duration) are not counted."""
     total = 0.0
     for a in actions:
         try:
@@ -165,78 +170,78 @@ def estimate_duration(actions: List[Action]) -> float:
 def _need(action: Action, n: int) -> None:
     if len(action.args) < n:
         raise SequenceError(
-            f"Ligne {action.lineno}: '{action.cmd}' attend au moins {n} argument(s) "
-            f"-> {action.raw!r}"
+            _("Line {}: '{}' expects at least {} argument(s) -> {!r}").format(
+                action.lineno, action.cmd, n, action.raw)
         )
 
 
 def _check_label(action: Action, label: str, valid_labels: Set[str]) -> None:
     if label not in valid_labels:
         raise SequenceError(
-            f"Ligne {action.lineno}: voie inconnue {label!r}. "
-            f"Voies valides : {sorted(valid_labels)}"
+            _("Line {}: unknown channel {!r}. Valid channels: {}").format(
+                action.lineno, label, sorted(valid_labels))
         )
 
 
-# Clés autorisées pour les arguments clé=valeur des servos et attentes.
+# Allowed keys for the key=value arguments of servos and waits.
 _SERVO_KEYS: Set[str] = {"step", "min", "max", "tol", "timeout", "settle", "invert"}
 _SERVO_ADAPT_KEYS: Set[str] = _SERVO_KEYS | {"damping"}
 _WAIT_KEYS: Set[str] = {"timeout"}
 
 
 def _ramp_steps(action: Action, raw: str) -> int:
-    """Valide l'argument optionnel ``[pas]`` de RAMP : c'est un NOMBRE DE PAS,
-    donc un entier >= 2 (``0.1`` est refusé : ce n'est pas une taille de pas)."""
+    """Validates RAMP's optional ``[steps]`` argument: it is a NUMBER OF STEPS,
+    hence an integer >= 2 (``0.1`` is refused: it is not a step size)."""
     try:
         n = int(raw)
     except ValueError:
         raise SequenceError(
-            f"Ligne {action.lineno}: RAMP [pas] est le nombre de pas (entier >= 2), "
-            f"reçu {raw!r} -> {action.raw!r}")
+            _("Line {}: RAMP [steps] is the number of steps (integer >= 2), "
+              "got {!r} -> {!r}").format(action.lineno, raw, action.raw))
     if n < 2:
         raise SequenceError(
-            f"Ligne {action.lineno}: RAMP [pas] (nombre de pas) doit être >= 2 "
-            f"(reçu {n}).")
+            _("Line {}: RAMP [steps] (number of steps) must be >= 2 (got {}).").format(
+                action.lineno, n))
     return n
 
 
 def _num(action: Action, idx: int, name: str, *, non_neg: bool = False,
          positive: bool = False) -> float:
-    """Convertit ``args[idx]`` en float, sinon lève une SequenceError explicite."""
+    """Converts ``args[idx]`` to float, otherwise raises an explicit SequenceError."""
     try:
         v = float(action.args[idx])
     except (IndexError, ValueError):
         raise SequenceError(
-            f"Ligne {action.lineno}: '{action.cmd}' attend un nombre pour {name} "
-            f"-> {action.raw!r}")
+            _("Line {}: '{}' expects a number for {} -> {!r}").format(
+                action.lineno, action.cmd, name, action.raw))
     if positive and not v > 0:
         raise SequenceError(
-            f"Ligne {action.lineno}: {name} doit être > 0 (reçu {v}).")
+            _("Line {}: {} must be > 0 (got {}).").format(action.lineno, name, v))
     if non_neg and v < 0:
         raise SequenceError(
-            f"Ligne {action.lineno}: {name} doit être >= 0 (reçu {v}).")
+            _("Line {}: {} must be >= 0 (got {}).").format(action.lineno, name, v))
     return v
 
 
 def _check_kwargs(action: Action, start: int, allowed: Set[str]) -> None:
-    """Valide les arguments ``clé=valeur`` : forme correcte, clé connue, valeur
-    numérique. Toute clé hors liste blanche est rejetée à l'analyse."""
+    """Validates ``key=value`` arguments: correct form, known key, numeric
+    value. Any key outside the whitelist is rejected at parse time."""
     for a in action.args[start:]:
         if "=" not in a:
             raise SequenceError(
-                f"Ligne {action.lineno}: '{action.cmd}' attend des paires clé=valeur, "
-                f"reçu {a!r} -> {action.raw!r}")
+                _("Line {}: '{}' expects key=value pairs, got {!r} -> {!r}").format(
+                    action.lineno, action.cmd, a, action.raw))
         k, v = a.split("=", 1)
         key = k.strip().lower()
         if key not in allowed:
             raise SequenceError(
-                f"Ligne {action.lineno}: clé inconnue {key!r} pour '{action.cmd}'. "
-                f"Clés valides : {sorted(allowed)}")
+                _("Line {}: unknown key {!r} for '{}'. Valid keys: {}").format(
+                    action.lineno, key, action.cmd, sorted(allowed)))
         try:
             float(v)
         except ValueError:
             raise SequenceError(
-                f"Ligne {action.lineno}: valeur non numérique pour {key!r} : {v!r}")
+                _("Line {}: non-numeric value for {!r}: {!r}").format(action.lineno, key, v))
 
 
 def _validate_action(action: Action, valid_labels: Set[str], valid_sensors: Set[str],
@@ -245,61 +250,61 @@ def _validate_action(action: Action, valid_labels: Set[str], valid_sensors: Set[
     if c == "SET":
         _need(action, 2)
         _check_label(action, action.args[0], valid_labels)
-        _num(action, 1, "la tension")
+        _num(action, 1, _("voltage"))
         if len(action.args) >= 3:
-            _num(action, 2, "le courant", non_neg=True)
+            _num(action, 2, _("current"), non_neg=True)
     elif c in ("VOLTAGE", "VOLT"):
         _need(action, 2)
         _check_label(action, action.args[0], valid_labels)
-        _num(action, 1, "la tension")
+        _num(action, 1, _("voltage"))
     elif c in ("CURRENT", "CURR"):
         _need(action, 2)
         _check_label(action, action.args[0], valid_labels)
-        _num(action, 1, "le courant", non_neg=True)
+        _num(action, 1, _("current"), non_neg=True)
     elif c in ("ON", "OFF"):
         _need(action, 1)
         _check_label(action, action.args[0], valid_labels)
     elif c in ("WAIT", "DELAY"):
         _need(action, 1)
-        _num(action, 0, "la durée", non_neg=True)
+        _num(action, 0, _("duration"), non_neg=True)
     elif c == "RAMP":
-        # 2 formes : "RAMP <voie> <v_fin> <duree>" (départ = valeur actuelle)
-        #         ou "RAMP <voie> <v_debut> <v_fin> <duree> [pas]".
+        # 2 forms: "RAMP <channel> <v_end> <duration>" (start = current value)
+        #       or "RAMP <channel> <v_start> <v_end> <duration> [steps]".
         _need(action, 3)
         _check_label(action, action.args[0], valid_labels)
         if len(action.args) >= 4:
-            _num(action, 1, "la tension de départ")
-            _num(action, 2, "la tension finale")
-            _num(action, 3, "la durée", positive=True)
+            _num(action, 1, _("start voltage"))
+            _num(action, 2, _("final voltage"))
+            _num(action, 3, _("duration"), positive=True)
             if len(action.args) >= 5:
                 _ramp_steps(action, action.args[4])
         else:
-            _num(action, 1, "la tension finale")
-            _num(action, 2, "la durée", positive=True)
+            _num(action, 1, _("final voltage"))
+            _num(action, 2, _("duration"), positive=True)
     elif c in ("SERVO", "SERVO_LIN", "SERVO_ADAPT"):
         _need(action, 3)
         _check_label(action, action.args[0], valid_labels)
         _check_label(action, action.args[1], valid_labels)
-        _num(action, 2, "le courant cible")
+        _num(action, 2, _("target current"))
         allowed = _SERVO_ADAPT_KEYS if c == "SERVO_ADAPT" else _SERVO_KEYS
         _check_kwargs(action, 3, allowed)
     elif c == "WAIT_CURRENT":
         _need(action, 3)
         _check_label(action, action.args[0], valid_labels)
         if action.args[1] not in _OPS:
-            raise SequenceError(f"Ligne {action.lineno}: opérateur invalide {action.args[1]!r}")
-        _num(action, 2, "la valeur")
+            raise SequenceError(_("Line {}: invalid operator {!r}").format(action.lineno, action.args[1]))
+        _num(action, 2, _("value"))
         _check_kwargs(action, 3, _WAIT_KEYS)
     elif c == "WAIT_TEMP":
         _need(action, 3)
         if action.args[0] not in valid_sensors:
             raise SequenceError(
-                f"Ligne {action.lineno}: capteur inconnu {action.args[0]!r}. "
-                f"Capteurs : {sorted(valid_sensors)}"
+                _("Line {}: unknown sensor {!r}. Sensors: {}").format(
+                    action.lineno, action.args[0], sorted(valid_sensors))
             )
         if action.args[1] not in _OPS:
-            raise SequenceError(f"Ligne {action.lineno}: opérateur invalide {action.args[1]!r}")
-        _num(action, 2, "la valeur")
+            raise SequenceError(_("Line {}: invalid operator {!r}").format(action.lineno, action.args[1]))
+        _num(action, 2, _("value"))
         _check_kwargs(action, 3, _WAIT_KEYS)
     elif c in ("SETV", "SETI"):
         _need(action, 2)
@@ -308,12 +313,12 @@ def _validate_action(action: Action, valid_labels: Set[str], valid_sensors: Set[
         try:
             refs = references(expr)
         except ExprError as exc:
-            raise SequenceError(f"Ligne {action.lineno}: {exc}") from exc
+            raise SequenceError(_("Line {}: {}").format(action.lineno, exc)) from exc
         for r in refs:
             if r not in valid_labels:
                 raise SequenceError(
-                    f"Ligne {action.lineno}: voie inconnue {r!r} dans l'expression. "
-                    f"Voies valides : {sorted(valid_labels)}"
+                    _("Line {}: unknown channel {!r} in expression. Valid channels: {}").format(
+                        action.lineno, r, sorted(valid_labels))
                 )
     elif c == "REPEAT":
         _need(action, 1)
@@ -321,30 +326,30 @@ def _validate_action(action: Action, valid_labels: Set[str], valid_sensors: Set[
             n = int(action.args[0])
         except ValueError:
             raise SequenceError(
-                f"Ligne {action.lineno}: 'REPEAT' attend un entier -> {action.raw!r}")
+                _("Line {}: 'REPEAT' expects an integer -> {!r}").format(action.lineno, action.raw))
         if n < 1:
-            raise SequenceError(f"Ligne {action.lineno}: 'REPEAT' doit être >= 1.")
+            raise SequenceError(_("Line {}: 'REPEAT' must be >= 1.").format(action.lineno))
     elif c == "RELAY":
         _need(action, 2)
         if action.args[0] not in valid_relays:
             raise SequenceError(
-                f"Ligne {action.lineno}: sortie de relais inconnue {action.args[0]!r}. "
-                f"Sorties : {sorted(valid_relays)}"
+                _("Line {}: unknown relay output {!r}. Outputs: {}").format(
+                    action.lineno, action.args[0], sorted(valid_relays))
             )
         if action.args[1].upper() not in ("ON", "OFF"):
             raise SequenceError(
-                f"Ligne {action.lineno}: 'RELAY' attend ON ou OFF -> {action.raw!r}")
+                _("Line {}: 'RELAY' expects ON or OFF -> {!r}").format(action.lineno, action.raw))
     elif c == "END":
         pass
     elif c in ("LOG", "ALL_OFF", "SHUTDOWN"):
         pass
     else:
-        raise SequenceError(f"Ligne {action.lineno}: commande inconnue {c!r} -> {action.raw!r}")
+        raise SequenceError(_("Line {}: unknown command {!r} -> {!r}").format(action.lineno, c, action.raw))
 
 
 def _expr_from_args(args: List[str]) -> str:
-    """Reconstruit l'expression à partir des arguments (un '=' de tête optionnel
-    est ignoré : ``SETV VG2 = (VD/2)+VG1``)."""
+    """Reconstructs the expression from the arguments (an optional leading '='
+    is ignored: ``SETV VG2 = (VD/2)+VG1``)."""
     expr = " ".join(args).strip()
     if expr.startswith("="):
         expr = expr[1:].strip()
@@ -352,10 +357,10 @@ def _expr_from_args(args: List[str]) -> str:
 
 
 def _kwargs(args: List[str]) -> dict:
-    """Extrait les paires clé=valeur d'une liste d'arguments (valeurs numériques).
+    """Extracts the key=value pairs from an argument list (numeric values).
 
-    Défensif : une valeur non numérique lève une ``SequenceError`` (les clés sont
-    déjà validées à l'analyse par :func:`_check_kwargs`)."""
+    Defensive: a non-numeric value raises a ``SequenceError`` (the keys are
+    already validated at parse time by :func:`_check_kwargs`)."""
     out = {}
     for a in args:
         if "=" in a:
@@ -363,38 +368,38 @@ def _kwargs(args: List[str]) -> dict:
             try:
                 out[k.strip().lower()] = float(v)
             except ValueError:
-                raise SequenceError(f"Valeur non numérique pour {k.strip()!r} : {v!r}")
+                raise SequenceError(_("Non-numeric value for {!r}: {!r}").format(k.strip(), v))
     return out
 
 
 # --------------------------------------------------------------------- runner
 class SequenceRunner:
-    """Exécute une liste d'actions dans un thread dédié, de façon interruptible."""
+    """Runs a list of actions in a dedicated thread, interruptibly."""
 
     def __init__(self, controller: "Controller"):
         self.ctrl = controller
         self._thread: Optional[threading.Thread] = None
-        # Deux intentions d'arrêt distinctes :
-        #  - _user_stop : arrêt demandé par l'opérateur (bouton Stop). REFUSÉ pendant
-        #    une désalimentation de sécurité (sinon des voies resteraient alimentées).
-        #  - _stop      : arrêt INCONDITIONNEL (force_stop), usage interne (fermeture
-        #    de l'appli, coupure dure), qui interrompt même une désalim de sécurité.
+        # Two distinct stop intents:
+        #  - _user_stop: stop requested by the operator (Stop button). REFUSED
+        #    during a safety power-down (otherwise channels would stay powered).
+        #  - _stop     : UNCONDITIONAL stop (force_stop), internal use (app
+        #    shutdown, hard cut-off), which interrupts even a safety power-down.
         self._stop = threading.Event()
         self._user_stop = threading.Event()
-        self._pause = threading.Event()  # set = exécution en pause
-        # Sérialise start() : ferme la fenêtre TOCTOU entre le test de _running et
-        # le démarrage du thread (deux start() concurrents -> une seule séquence).
+        self._pause = threading.Event()  # set = execution paused
+        # Serializes start(): closes the TOCTOU window between testing _running
+        # and starting the thread (two concurrent start() -> a single sequence).
         self._start_lock = threading.Lock()
         self._running = False
-        # safety_mode : séquence de désalimentation lancée par la sécurité. Elle
-        # doit s'exécuter MÊME quand le verrou de sécurité est armé (tripped) ;
-        # elle n'écoute donc que son propre _stop, pas abort_event/tripped.
+        # safety_mode: power-down sequence launched by safety. It must run EVEN
+        # when the safety lock is armed (tripped); it therefore only listens to
+        # its own _stop, not abort_event/tripped.
         self._safety_mode = False
-        # Progression (index de l'action courante, total) — attributs simples lus
-        # par l'IHM via son timer, même modèle que le reste.
+        # Progress (current action index, total) — simple attributes read by
+        # the GUI via its timer, same model as the rest.
         self.progress = (0, 0)
-        # Mode pas-à-pas : l'exécution attend step_event avant CHAQUE action (hors
-        # désalimentation de sécurité, qui ne doit jamais être bloquée).
+        # Step-by-step mode: execution waits on step_event before EVERY action
+        # (except during a safety power-down, which must never be blocked).
         self.step_mode = False
         self.step_event = threading.Event()
         self.on_line: Optional[Callable[[int, str], None]] = None
@@ -405,27 +410,27 @@ class SequenceRunner:
         return self._running
 
     def set_step_mode(self, on: bool) -> None:
-        """Active/désactive le pas-à-pas. En le désactivant, on libère une éventuelle
-        attente en cours (l'exécution reprend en continu)."""
+        """Enables/disables step-by-step. Disabling it releases any pending wait
+        (execution resumes continuously)."""
         self.step_mode = bool(on)
         if not on:
             self.step_event.set()
 
     def step_once(self) -> None:
-        """Autorise l'exécution de la prochaine action en attente (pas-à-pas)."""
+        """Allows the next pending action to run (step-by-step)."""
         self.step_event.set()
 
     def start(self, actions: List[Action], safety_mode: bool = False) -> None:
-        """Démarre l'exécution des ``actions`` dans un thread dédié.
+        """Starts running ``actions`` in a dedicated thread.
 
-        ``safety_mode=True`` marque une désalimentation de sécurité : elle s'exécute
-        même verrou de sécurité armé, ignore l'arrêt utilisateur et la pause, et ne
-        réinitialise pas ``abort_event``. Lève ``RuntimeError`` si une séquence tourne
-        déjà."""
-        # Verrou : le test-puis-armement de _running doit être atomique.
+        ``safety_mode=True`` marks a safety power-down: it runs even with the
+        safety lock armed, ignores the user stop and the pause, and does not
+        reset ``abort_event``. Raises ``RuntimeError`` if a sequence is already
+        running."""
+        # Lock: the test-then-arm of _running must be atomic.
         with self._start_lock:
             if self._running:
-                raise RuntimeError("Une séquence est déjà en cours.")
+                raise RuntimeError(_("A sequence is already running."))
             self._running = True
         self._stop.clear()
         self._user_stop.clear()
@@ -441,8 +446,8 @@ class SequenceRunner:
         self._thread.start()
 
     def stop(self) -> bool:
-        """Arrêt demandé par l'OPÉRATEUR (interrompt WAIT/SERVO). REFUSÉ pendant une
-        désalimentation de sécurité. Retourne True si pris en compte, False si refusé."""
+        """Stop requested by the OPERATOR (interrupts WAIT/SERVO). REFUSED during a
+        safety power-down. Returns True if honored, False if refused."""
         if self._safety_mode:
             return False
         self._user_stop.set()
@@ -450,13 +455,13 @@ class SequenceRunner:
         return True
 
     def force_stop(self) -> None:
-        """Arrêt INCONDITIONNEL (usage interne : fermeture de l'appli, coupure dure).
-        Interrompt même une désalimentation de sécurité."""
+        """UNCONDITIONAL stop (internal use: app shutdown, hard cut-off).
+        Interrupts even a safety power-down."""
         self._stop.set()
         self.ctrl.abort_event.set()
 
     def pause(self) -> None:
-        if not self._safety_mode:   # une désalimentation de sécurité ne se met pas en pause
+        if not self._safety_mode:   # a safety power-down cannot be paused
             self._pause.set()
 
     def resume(self) -> None:
@@ -470,20 +475,20 @@ class SequenceRunner:
         return self._pause.is_set() and not self._safety_mode
 
     def _aborted(self) -> bool:
-        """Faut-il interrompre l'exécution ? En mode sécurité, SEUL ``force_stop``
-        (``_stop``) compte : ni l'arrêt utilisateur, ni le verrou armé, ni
-        ``abort_event`` ne doivent stopper une désalimentation en cours. Sinon,
-        n'importe lequel de ces signaux avorte la séquence utilisateur."""
+        """Should execution be interrupted? In safety mode, ONLY ``force_stop``
+        (``_stop``) counts: neither the user stop, nor the armed lock, nor
+        ``abort_event`` must stop a running power-down. Otherwise, any of these
+        signals aborts the user sequence."""
         if self._safety_mode:
-            # Une désalim de sécurité n'écoute QUE force_stop (_stop), jamais l'arrêt
-            # utilisateur ni le verrou : elle doit aller au bout de l'extinction.
+            # A safety power-down listens ONLY to force_stop (_stop), never the
+            # user stop nor the lock: it must run the switch-off to completion.
             return self._stop.is_set()
         return (self._stop.is_set() or self._user_stop.is_set()
                 or self.ctrl.abort_event.is_set() or self.ctrl.tripped)
 
     def _sleep(self, seconds: float) -> bool:
-        """Pause interruptible (et suspendable). Retourne False si interrompue.
-        Le décompte est gelé tant que la séquence est en pause."""
+        """Interruptible (and pausable) sleep. Returns False if interrupted.
+        The countdown is frozen while the sequence is paused."""
         remaining = seconds
         last = time.monotonic()
         while remaining > 0:
@@ -497,28 +502,29 @@ class SequenceRunner:
         return not self._aborted()
 
     def _run(self, actions: List[Action]) -> None:
-        """Corps du thread d'exécution : parcourt les actions une à une.
+        """Execution thread body: walks the actions one by one.
 
-        Gère à chaque tour la pause, l'avortement et le pas-à-pas, surligne la ligne
-        courante (``on_line``), journalise, puis délègue à :meth:`_execute`. Sort au
-        premier échec/interruption. Le bloc ``finally`` remet ``_running`` à False,
-        ajuste l'issue si la sécurité a tranché, et notifie ``on_finish(ok, message)``."""
+        Handles the pause, the abort and the step-by-step mode on each round,
+        highlights the current line (``on_line``), logs, then delegates to
+        :meth:`_execute`. Exits on the first failure/interruption. The
+        ``finally`` block resets ``_running`` to False, adjusts the outcome if
+        safety decided, and notifies ``on_finish(ok, message)``."""
         ok = True
-        message = "Séquence terminée."
+        message = _("Sequence completed.")
         total = len(actions)
         try:
             for idx, action in enumerate(actions):
                 self.progress = (idx, total)
                 while self._paused() and not self._aborted():
-                    time.sleep(0.05)   # suspendue entre deux actions
+                    time.sleep(0.05)   # suspended between two actions
                 if self._aborted():
                     ok = False
-                    message = "Séquence interrompue."
+                    message = _("Sequence interrupted.")
                     break
-                # On surligne la PROCHAINE action AVANT l'attente pas-à-pas.
+                # Highlights the NEXT action BEFORE the step-by-step wait.
                 if self.on_line:
                     self.on_line(action.lineno, action.raw)
-                # Pas-à-pas : on attend l'autorisation (jamais en désalim de sécurité).
+                # Step-by-step: waits for authorization (never during a safety power-down).
                 if self.step_mode and not self._safety_mode:
                     self.step_event.clear()
                     while not self.step_event.is_set():
@@ -528,35 +534,35 @@ class SequenceRunner:
                     self.step_event.clear()
                     if self._aborted():
                         ok = False
-                        message = "Séquence interrompue."
+                        message = _("Sequence interrupted.")
                         break
                 self.ctrl.log(f"> L{action.lineno}: {action.raw}")
                 if not self._execute(action):
                     ok = False
-                    message = f"Échec/interruption ligne {action.lineno}."
+                    message = _("Failure/interruption at line {}.").format(action.lineno)
                     break
             else:
                 self.progress = (total, total)
         except Exception as exc:
             ok = False
-            message = f"Erreur ligne : {exc}"
-            self.ctrl.log(f"Erreur séquence : {exc}")
+            message = _("Line error: {}").format(exc)
+            self.ctrl.log(_("Sequence error: {}").format(exc))
         finally:
             self._running = False
             if self.ctrl.tripped and not self._safety_mode:
                 ok = False
-                message = "Séquence avortée par la sécurité."
+                message = _("Sequence aborted by safety.")
             self.ctrl.log(message)
             if self.on_finish:
                 self.on_finish(ok, message)
 
     def _execute(self, action: Action) -> bool:
-        """Exécute UNE action en la routant vers la primitive du contrôleur.
+        """Executes ONE action by routing it to the matching controller primitive.
 
-        Retourne True si l'action a réussi et qu'on peut enchaîner, False en cas
-        d'échec ou d'interruption (WAIT/RAMP/SERVO/WAIT_* retournent False s'ils sont
-        avortés). Les valeurs sont déjà validées à l'analyse : on peut convertir les
-        arguments sans re-vérifier."""
+        Returns True if the action succeeded and execution can continue, False
+        on failure or interruption (WAIT/RAMP/SERVO/WAIT_* return False if
+        aborted). Values are already validated at parse time: arguments can be
+        converted without re-checking."""
         c = action.cmd
         a = action.args
         if c == "SET":
@@ -592,7 +598,7 @@ class SequenceRunner:
             return self._sleep(float(a[0]))
         if c == "RAMP":
             return self._ramp(a)
-        if c in ("SERVO", "SERVO_LIN"):  # 'SERVO' = alias rétrocompatible
+        if c in ("SERVO", "SERVO_LIN"):  # 'SERVO' = backward-compatible alias
             kw = _kwargs(a[3:])
             return self.ctrl.servo(
                 adjust_label=a[0],
@@ -640,25 +646,25 @@ class SequenceRunner:
         return False
 
     def _ramp(self, a: List[str]) -> bool:
-        """Exécute une rampe de tension linéaire par paliers (interruptible).
+        """Runs a linear, step-wise voltage ramp (interruptible).
 
-        Deux formes (cf. grammaire RAMP) : sans tension de départ, on part de la
-        consigne ACTUELLE de la voie ; sinon départ explicite avec un nombre de pas
-        optionnel. Durée <= 0 -> application directe de la valeur finale. Retourne
-        False si la rampe est avortée en cours."""
+        Two forms (see the RAMP grammar): without a start voltage, starts from
+        the channel's CURRENT setpoint; otherwise an explicit start with an
+        optional number of steps. Duration <= 0 -> the final value is applied
+        directly. Returns False if the ramp is aborted mid-way."""
         label = a[0]
         if len(a) == 3:
-            # RAMP <voie> <v_fin> <duree> : départ = consigne ACTUELLE de la voie.
+            # RAMP <channel> <v_end> <duration>: start = channel's CURRENT setpoint.
             v0 = self.ctrl.get_setpoint(label).set_voltage
             v1, duration = float(a[1]), float(a[2])
             steps = max(2, int(duration / 0.1))
         else:
-            # RAMP <voie> <v_debut> <v_fin> <duree> [pas] : [pas] = NOMBRE de pas.
+            # RAMP <channel> <v_start> <v_end> <duration> [steps]: [steps] = NUMBER of steps.
             v0, v1, duration = float(a[1]), float(a[2]), float(a[3])
             steps = int(a[4]) if len(a) >= 5 else max(2, int(duration / 0.1))
         steps = max(1, steps)
         if duration <= 0:
-            # Durée nulle/négative : on applique directement la valeur finale.
+            # Zero/negative duration: applies the final value directly.
             self.ctrl.set_voltage(label, v1)
             return True
         dt = duration / steps
@@ -672,8 +678,8 @@ class SequenceRunner:
         return True
 
     def _wait_current(self, a: List[str]) -> bool:
-        """Attend qu'une voie satisfasse ``courant <op> valeur`` (défaut timeout 30 s).
-        Retourne True si la condition est remplie, False sur timeout ou avortement."""
+        """Waits for a channel to satisfy ``current <op> value`` (default timeout
+        30 s). Returns True if the condition is met, False on timeout or abort."""
         label, op, value = a[0], a[1], float(a[2])
         kw = _kwargs(a[3:])
         timeout = kw.get("timeout", 30.0)
@@ -690,9 +696,9 @@ class SequenceRunner:
         return False
 
     def _wait_temp(self, a: List[str]) -> bool:
-        """Attend qu'un capteur satisfasse ``température <op> valeur`` (défaut timeout
-        60 s). Une mesure ``NaN`` (capteur en défaut) ne valide jamais la condition.
-        Retourne True si remplie, False sur timeout ou avortement."""
+        """Waits for a sensor to satisfy ``temperature <op> value`` (default
+        timeout 60 s). A ``NaN`` reading (sensor in fault) never satisfies the
+        condition. Returns True if met, False on timeout or abort."""
         sensor, op, value = a[0], a[1], float(a[2])
         kw = _kwargs(a[3:])
         timeout = kw.get("timeout", 60.0)
@@ -702,22 +708,22 @@ class SequenceRunner:
             if self._aborted():
                 return False
             t = self.ctrl.snapshot().temperatures.get(sensor, float("nan"))
-            if t == t and cmp(t, value):  # t==t écarte NaN
+            if t == t and cmp(t, value):  # t==t excludes NaN
                 return True
             time.sleep(0.2)
         self.ctrl.log(f"WAIT_TEMP timeout ({sensor} {op} {value}).")
         return False
 
 
-# ------------------------------------------------------- séquence d'arrêt
+# ------------------------------------------------------- shutdown sequence
 def build_shutdown_actions(labels: List[str], delay: float = 0.5) -> List[Action]:
-    """Construit une séquence de désalimentation ordonnée.
+    """Builds an orderly power-down sequence.
 
-    Les voies sont éteintes dans l'ordre **inverse** de ``labels`` (donc inverse
-    de l'ordre d'allumage défini dans la configuration), avec une temporisation
-    ``delay`` entre chaque extinction. Utilisée par le bouton *Séquentiel
-    d'arrêt* ET par la sécurité thermique (extinction douce plutôt que coupure
-    brutale, pour ne pas abîmer la carte).
+    The channels are switched off in the **reverse** order of ``labels`` (hence
+    reverse of the switch-on order defined in the configuration), with a
+    ``delay`` between each switch-off. Used by the *Shutdown sequence* button
+    AND by the thermal safety (soft switch-off rather than an abrupt cut-off,
+    to avoid damaging the board).
     """
     actions: List[Action] = []
     ln = 0
@@ -736,8 +742,8 @@ def load_shutdown_actions(
     path, labels: List[str], valid_labels: Set[str], valid_sensors: Set[str],
     delay: float = 0.5, valid_relays: Set[str] = frozenset(),
 ) -> List[Action]:
-    """Charge la séquence d'arrêt depuis un fichier si fourni/existant, sinon
-    construit une extinction ordonnée par défaut."""
+    """Loads the shutdown sequence from a file if provided/existing, otherwise
+    builds a default orderly switch-off."""
     from pathlib import Path
 
     if path:

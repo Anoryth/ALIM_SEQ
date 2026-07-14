@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .i18n import _
+
 
 @dataclass
 class ChannelConfig:
@@ -363,72 +365,74 @@ def _validate(cfg: AppConfig) -> None:
         driver = str((e or {}).get("driver", "HMP4040"))
         if driver.upper() not in known:
             errors.append(
-                f"Instrument {name!r} : driver {driver!r} inconnu "
-                f"(connus : {available_instruments()})."
+                _("Instrument {!r}: unknown driver {!r} (known: {}).").format(
+                    name, driver, available_instruments())
             )
         elif driver_role(driver) == "temperature":
             n_temp += 1
     if n_temp > 1:
         errors.append(
-            f"{n_temp} instruments de température déclarés : un seul est supporté "
-            f"(les capteurs 'temperatures' sont rattachés à l'unique module NI)."
+            _("{} temperature instruments declared: only one is supported "
+              "(the 'temperatures' sensors attach to the single NI module).").format(n_temp)
         )
 
     for name, s in cfg.supplies.items():
         model = str(s.get("model", "HMP4040"))
         if model.upper() not in PSU_MODELS:
             errors.append(
-                f"Alimentation {name!r} : modèle {model!r} inconnu "
-                f"(connus : {sorted(PSU_MODELS)})."
+                _("Supply {!r}: unknown model {!r} (known: {}).").format(
+                    name, model, sorted(PSU_MODELS))
             )
 
     seen_phys: Dict[tuple, str] = {}
     for label, ch in cfg.channels.items():
         if ch.supply not in cfg.supplies:
             errors.append(
-                f"Voie {label!r} : alimentation {ch.supply!r} inconnue "
-                f"(définie dans 'supplies' ?)"
+                _("Channel {!r}: unknown supply {!r} (defined in 'supplies'?)").format(
+                    label, ch.supply)
             )
         else:
             model = str(cfg.supplies[ch.supply].get("model", "HMP4040"))
             count = psu_channel_count(model)
             if count and (ch.channel < 1 or ch.channel > count):
                 errors.append(
-                    f"Voie {label!r} : canal {ch.channel} hors plage 1-{count} "
-                    f"(modèle {model} de {ch.supply!r})."
+                    _("Channel {!r}: channel {} out of range 1-{} (model {} of {!r}).").format(
+                        label, ch.channel, count, model, ch.supply)
                 )
             limits = psu_model_limits(model)
             if limits:
-                max_v, max_i, _ = limits
+                max_v, max_i, _imax = limits
                 if ch.max_voltage > max_v:
-                    errors.append(f"Voie {label!r} : max_voltage {ch.max_voltage} V "
-                                  f"> {max_v} V (limite {model}).")
+                    errors.append(_("Channel {!r}: max_voltage {} V > {} V (limit {}).").format(
+                        label, ch.max_voltage, max_v, model))
                 if ch.max_current > max_i:
-                    errors.append(f"Voie {label!r} : max_current {ch.max_current} A "
-                                  f"> {max_i} A (limite {model}).")
+                    errors.append(_("Channel {!r}: max_current {} A > {} A (limit {}).").format(
+                        label, ch.max_current, max_i, model))
         key = (ch.supply, ch.channel)
         if key in seen_phys:
             errors.append(
-                f"Voie {label!r} : le canal {ch.channel} de {ch.supply!r} est déjà "
-                f"affecté à la voie {seen_phys[key]!r} (un canal physique = une seule voie)."
+                _("Channel {!r}: channel {} of {!r} is already assigned to channel {!r} "
+                  "(one physical channel = one channel only).").format(
+                      label, ch.channel, ch.supply, seen_phys[key])
             )
         else:
             seen_phys[key] = label
     for name, t in cfg.temperatures.items():
         if t.critical <= t.warning:
             errors.append(
-                f"Capteur {name!r} : seuil 'critical' ({t.critical}) doit être "
-                f"> 'warning' ({t.warning})"
+                _("Sensor {!r}: 'critical' threshold ({}) must be > 'warning' ({})").format(
+                    name, t.critical, t.warning)
             )
         if t.ai_min >= t.ai_max:
             errors.append(
-                f"Capteur {name!r} : 'ai_min' ({t.ai_min}) doit être < 'ai_max' ({t.ai_max})."
+                _("Sensor {!r}: 'ai_min' ({}) must be < 'ai_max' ({}).").format(
+                    name, t.ai_min, t.ai_max)
             )
         for req in t.requires:
             if req not in cfg.channels and req not in cfg.groups:
                 errors.append(
-                    f"Capteur {name!r} : voie requise {req!r} inconnue "
-                    f"(dans 'requires')."
+                    _("Sensor {!r}: unknown required channel {!r} (in 'requires').").format(
+                        name, req)
                 )
         conv = t.converter if isinstance(t.converter, dict) else {}
         ctype = str(conv.get("type", "identity")).lower()
@@ -439,15 +443,15 @@ def _validate(cfg: AppConfig) -> None:
             from .temperature import build_converter
             build_converter(conv)
         except Exception as exc:
-            errors.append(f"Capteur {name!r} : convertisseur invalide — {exc}")
+            errors.append(_("Sensor {!r}: invalid converter — {}").format(name, exc))
         if ctype in ("ntc", "ptc", "rtd"):
             fm = conv.get("fault_margin")
             no_band = t.valid_min is None and t.valid_max is None
             if no_band and fm is not None and float(fm) == 0:
                 errors.append(
-                    f"Capteur {name!r} : convertisseur {ctype!r} sans garde-fou de "
-                    f"débranchement -> définir 'valid_min'/'valid_max' ou laisser un "
-                    f"'fault_margin' > 0 (0 désactive la détection capteur débranché)."
+                    _("Sensor {!r}: converter {!r} without disconnection guard -> set "
+                      "'valid_min'/'valid_max' or leave a 'fault_margin' > 0 (0 disables "
+                      "disconnected-sensor detection).").format(name, ctype)
                 )
         if ctype in ("thermocouple", "tc"):
             # Un thermocouple n'a pas de détection de débranchement par pont
@@ -456,45 +460,44 @@ def _validate(cfg: AppConfig) -> None:
             # un module avec open-TC detect, cf. docstring ThermocoupleConverter).
             if t.valid_min is None or t.valid_max is None:
                 errors.append(
-                    f"Capteur {name!r} : un thermocouple exige 'valid_min' ET "
-                    f"'valid_max' (bande de température plausible) — seul filet "
-                    f"logiciel contre un TC débranché/entrée flottante."
+                    _("Sensor {!r}: a thermocouple requires 'valid_min' AND 'valid_max' "
+                      "(plausible temperature band) — the only software net against a "
+                      "disconnected/floating-input TC.").format(name)
                 )
         if t.ref_channel is not None:
             if t.ref_channel not in cfg.channels and t.ref_channel not in cfg.groups:
                 errors.append(
-                    f"Capteur {name!r} : 'ref_channel' {t.ref_channel!r} inconnu "
-                    f"(voie ou groupe attendu)."
+                    _("Sensor {!r}: unknown 'ref_channel' {!r} (channel or group expected).").format(
+                        name, t.ref_channel)
                 )
             if t.expected_vref is None:
                 errors.append(
-                    f"Capteur {name!r} : 'ref_channel' défini mais aucune tension de "
-                    f"référence attendue ('ref_voltage' au niveau du capteur, ou "
-                    f"'v_ref' dans le convertisseur)."
+                    _("Sensor {!r}: 'ref_channel' set but no expected reference voltage "
+                      "('ref_voltage' at sensor level, or 'v_ref' in the converter).").format(name)
                 )
 
     seen_members: Dict[str, str] = {}
     for name, g in cfg.groups.items():
         if name in cfg.channels:
-            errors.append(f"Groupe {name!r} : le nom entre en conflit avec une voie.")
+            errors.append(_("Group {!r}: the name conflicts with a channel.").format(name))
         if g.mode != "series":
-            errors.append(f"Groupe {name!r} : seul le mode 'series' est supporté pour l'instant.")
+            errors.append(_("Group {!r}: only 'series' mode is supported for now.").format(name))
         if len(g.members) < 2:
-            errors.append(f"Groupe {name!r} : au moins 2 voies membres requises.")
+            errors.append(_("Group {!r}: at least 2 member channels required.").format(name))
         if len(set(g.members)) != len(g.members):
-            errors.append(f"Groupe {name!r} : voie membre dupliquée.")
+            errors.append(_("Group {!r}: duplicate member channel.").format(name))
         for m in g.members:
             if m not in cfg.channels:
-                errors.append(f"Groupe {name!r} : voie membre inconnue {m!r}.")
+                errors.append(_("Group {!r}: unknown member channel {!r}.").format(name, m))
             elif m in seen_members:
                 errors.append(
-                    f"Groupe {name!r} : la voie {m!r} appartient déjà au groupe "
-                    f"{seen_members[m]!r}."
+                    _("Group {!r}: channel {!r} already belongs to group {!r}.").format(
+                        name, m, seen_members[m])
                 )
             else:
                 seen_members[m] = name
         if g.split not in ("equal", "fill"):
-            errors.append(f"Groupe {name!r} : 'split' doit être 'equal' ou 'fill'.")
+            errors.append(_("Group {!r}: 'split' must be 'equal' or 'fill'.").format(name))
 
     # Sorties de relais : labels uniques et sans collision avec voies/groupes (espaces
     # de noms distincts côté séquenceur, mais un nom partagé prêterait à confusion).
@@ -503,15 +506,15 @@ def _validate(cfg: AppConfig) -> None:
     for lbl, meta in _relay_outputs(cfg.instruments).items():
         if lbl in taken:
             errors.append(
-                f"Sortie de relais {lbl!r} ({meta['instrument']!r}) : le nom entre en "
-                f"conflit avec une voie ou un groupe."
+                _("Relay output {!r} ({!r}): the name conflicts with a channel or group.").format(
+                    lbl, meta['instrument'])
             )
         elif lbl in seen_out:
             errors.append(
-                f"Sortie de relais {lbl!r} : déjà déclarée par {seen_out[lbl]!r}."
+                _("Relay output {!r}: already declared by {!r}.").format(lbl, seen_out[lbl])
             )
         else:
             seen_out[lbl] = meta["instrument"]
 
     if errors:
-        raise ValueError("Configuration invalide :\n  - " + "\n  - ".join(errors))
+        raise ValueError(_("Invalid configuration:") + "\n  - " + "\n  - ".join(errors))

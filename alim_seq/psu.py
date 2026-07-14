@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .instrument import Instrument, MesureVI, SourceTension
+from .i18n import _
 
 
 def scan_instruments(model_filter: str = "", visa_backend: str = "",
@@ -39,7 +40,7 @@ def scan_instruments(model_filter: str = "", visa_backend: str = "",
     try:
         import pyvisa
     except ImportError as exc:  # pragma: no cover - dépend de l'environnement
-        raise RuntimeError("pyvisa requis pour le scan VISA") from exc
+        raise RuntimeError(_("pyvisa is required for the VISA scan")) from exc
 
     rm = pyvisa.ResourceManager(visa_backend) if visa_backend else pyvisa.ResourceManager()
     found: List[Dict[str, str]] = []
@@ -76,22 +77,22 @@ def probe_instrument(resource: str, visa_backend: str = "",
     try:
         import pyvisa
     except ImportError as exc:  # pragma: no cover - dépend de l'environnement
-        raise RuntimeError("pyvisa requis pour tester une adresse VISA") from exc
+        raise RuntimeError(_("pyvisa is required to test a VISA address")) from exc
     rm = pyvisa.ResourceManager(visa_backend) if visa_backend else pyvisa.ResourceManager()
     try:
         inst = rm.open_resource(resource)
     except Exception as exc:
-        raise RuntimeError(f"ouverture impossible : {exc}") from exc
+        raise RuntimeError(_("cannot open: {}").format(exc)) from exc
     try:
         inst.timeout = timeout_ms
         inst.read_termination = "\n"
         inst.write_termination = "\n"
         idn = str(inst.query("*IDN?")).strip()
         if not idn:
-            raise RuntimeError("réponse vide à '*IDN?'")
+            raise RuntimeError(_("empty response to '*IDN?'"))
         return idn
     except Exception as exc:
-        raise RuntimeError(f"pas de réponse à '*IDN?' : {exc}") from exc
+        raise RuntimeError(_("no response to '*IDN?': {}").format(exc)) from exc
     finally:
         try:
             inst.close()
@@ -191,21 +192,22 @@ class HMP4040(BasePSU):
             import pyvisa  # import paresseux : non requis en mode simulation
         except ImportError as exc:  # pragma: no cover - dépend de l'environnement
             raise RuntimeError(
-                "pyvisa n'est pas installé (requis en mode matériel réel). "
-                "Installer pyvisa, ou passer en simulation ('simulate': true)."
+                _("pyvisa is not installed (required in real-hardware mode). "
+                  "Install pyvisa, or switch to simulation ('simulate': true).")
             ) from exc
 
         # 1) Ouverture de la session VISA.
-        self._log(f"[{self.resource}] ouverture VISA "
-                  f"(backend={self.visa_backend or 'système'})…")
+        self._log("[{}] {}".format(self.resource, _("opening VISA (backend={})…").format(
+            self.visa_backend or _("system"))))
         try:
             rm = pyvisa.ResourceManager(self.visa_backend) if self.visa_backend \
                 else pyvisa.ResourceManager()
             self._inst = rm.open_resource(self.resource)
         except Exception as exc:
             raise RuntimeError(
-                f"[{self.resource}] ouverture VISA impossible : {exc}. "
-                f"Vérifier la chaîne 'resource' et le backend VISA installé."
+                "[{}] {}".format(self.resource, _(
+                    "cannot open VISA: {}. Check the 'resource' string and the installed "
+                    "VISA backend.").format(exc))
             ) from exc
         self._inst.timeout = self.timeout_ms
 
@@ -229,15 +231,17 @@ class HMP4040(BasePSU):
             self.idn = str(self._query("*IDN?")).strip()
         except Exception as exc:
             raise RuntimeError(
-                f"[{self.resource}] pas de réponse à '*IDN?' : {exc}.\n"
-                f"  Pistes : socket brut -> la 'resource' doit finir par '::5025::SOCKET' ; "
-                f"USB -> régler l'alim en mode TMC (PAS CDC) ; vérifier IP/câble/pare-feu ; "
-                f"VXI-11 (::inst0::INSTR) peut timeouter selon la VISA."
+                "[{}] {}".format(self.resource, _(
+                    "no response to '*IDN?': {}.\n"
+                    "  Hints: raw socket -> the 'resource' must end with '::5025::SOCKET'; "
+                    "USB -> set the supply to TMC mode (NOT CDC); check IP/cable/firewall; "
+                    "VXI-11 (::inst0::INSTR) may time out depending on the VISA.").format(exc))
             ) from exc
-        self._log(f"[{self.resource}] IDN: {self.idn}")
+        self._log("[{}] IDN: {}".format(self.resource, self.idn))
         if "HMP" not in self.idn.upper():
-            self._log(f"[{self.resource}] ATTENTION : '{self.idn}' ne ressemble pas à "
-                      f"un R&S HMP — vérifier que c'est la bonne ressource.")
+            self._log("[{}] {}".format(self.resource, _(
+                "WARNING: '{}' does not look like an R&S HMP — check this is the right "
+                "resource.").format(self.idn)))
 
         # 5) Configuration : on désélectionne TOUTES les voies (OUTP:SEL OFF) AVANT
         # d'activer l'interrupteur général, pour qu'aucune sortie ne s'active à la
@@ -251,10 +255,11 @@ class HMP4040(BasePSU):
             self._write("OUTP:GEN ON")
         except Exception as exc:
             raise RuntimeError(
-                f"[{self.resource}] échec d'initialisation SCPI : {exc}. "
-                f"L'instrument répond à *IDN? mais pas aux commandes de configuration."
+                "[{}] {}".format(self.resource, _(
+                    "SCPI initialization failed: {}. The instrument answers *IDN? but not "
+                    "the configuration commands.").format(exc))
             ) from exc
-        self._log(f"[{self.resource}] {self.model} prêt ({self.n_channels} voies).")
+        self._log("[{}] {}".format(self.resource, _("{} ready ({} channels).").format(self.model, self.n_channels)))
 
     def _safe_clear(self) -> None:
         """Vide le buffer d'E/S de l'instrument, quel que soit le transport.
@@ -563,7 +568,7 @@ def create_psu(model: str, resource: str = "", simulate: bool = True,
     cls = PSU_MODELS.get(str(model).upper())
     if cls is None:
         raise ValueError(
-            f"Modèle d'alimentation inconnu : {model!r}. Connus : {available_models()}")
+            _("Unknown supply model: {!r}. Known: {}").format(model, available_models()))
     if simulate:
         return MockPSU(name=name, n_channels=cls.n_channels, loads=loads)
     return cls(resource=resource, visa_backend=visa_backend,

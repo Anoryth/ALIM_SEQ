@@ -47,7 +47,7 @@ class ConfigWizard(QtWidgets.QDialog):
     """Assistant de configuration du banc. ``result_config`` porte le dict généré
     (ou reste ``None`` si annulé)."""
 
-    _COLS = ["Inclure", "Nom", "Modèle", "Adresse VISA (IDN)"]
+    _NCOLS = 4
 
     def __init__(self, parent=None, visa_backend: str = ""):
         super().__init__(parent)
@@ -59,24 +59,25 @@ class ConfigWizard(QtWidgets.QDialog):
 
         v = QtWidgets.QVBoxLayout(self)
         intro = QtWidgets.QLabel(
-            "Bienvenue. Cet assistant prépare une configuration de départ.<br>"
-            "• <b>Sans matériel</b> : générez une configuration de <b>simulation</b>.<br>"
-            "• <b>Avec matériel</b> : <b>scannez</b> les alimentations VISA branchées, "
-            "cochez celles à inclure, puis générez.")
+            self.tr(
+                "Welcome. This wizard prepares a starting configuration.<br>"
+                "• <b>Without hardware</b>: generate a <b>simulation</b> configuration.<br>"
+                "• <b>With hardware</b>: <b>scan</b> the connected VISA supplies, "
+                "check the ones to include, then generate."))
         intro.setTextFormat(QtCore.Qt.RichText)
         intro.setWordWrap(True)
         v.addWidget(intro)
 
         row = QtWidgets.QHBoxLayout()
-        self.btn_scan = QtWidgets.QPushButton("🔎 Scanner le matériel VISA")
-        self.btn_scan.setToolTip("Détecte l'USB-TMC et le LAN VXI-11. Un HMP en mode "
-                                 "socket LAN (::5025::SOCKET) n'est PAS découvrable : "
-                                 "utiliser « Ajouter une adresse manuelle ».")
+        self.btn_scan = QtWidgets.QPushButton(self.tr("🔎 Scan VISA hardware"))
+        self.btn_scan.setToolTip(self.tr("Detects USB-TMC and LAN VXI-11. An HMP in LAN "
+                                 "socket mode (::5025::SOCKET) is NOT discoverable: "
+                                 "use “Add a manual address”."))
         self.btn_scan.clicked.connect(self._scan)
         row.addWidget(self.btn_scan)
-        self.btn_manual = QtWidgets.QPushButton("➕ Ajouter une adresse manuelle…")
-        self.btn_manual.setToolTip("Saisir et tester une adresse VISA connue "
-                                   "(ex. socket LAN TCPIP0::IP::5025::SOCKET).")
+        self.btn_manual = QtWidgets.QPushButton(self.tr("➕ Add a manual address…"))
+        self.btn_manual.setToolTip(self.tr("Enter and test a known VISA address "
+                                   "(e.g. LAN socket TCPIP0::IP::5025::SOCKET)."))
         self.btn_manual.clicked.connect(self._add_manual)
         row.addWidget(self.btn_manual)
         self.scan_status = QtWidgets.QLabel("")
@@ -85,20 +86,20 @@ class ConfigWizard(QtWidgets.QDialog):
         row.addStretch(1)
         v.addLayout(row)
 
-        self.table = QtWidgets.QTableWidget(0, len(self._COLS))
-        self.table.setHorizontalHeaderLabels(self._COLS)
+        self.table = QtWidgets.QTableWidget(0, self._NCOLS)
+        self.table.setHorizontalHeaderLabels([self.tr("Include"), self.tr("Name"), self.tr("Model"), self.tr("VISA address (IDN)")])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setColumnWidth(1, 120)
         self.table.setColumnWidth(2, 120)
         v.addWidget(self.table, 1)
 
         btns = QtWidgets.QHBoxLayout()
-        sim = QtWidgets.QPushButton("Configuration de simulation")
-        sim.setToolTip("Génère une config sans matériel (une HMP4040, CH1/CH2).")
+        sim = QtWidgets.QPushButton(self.tr("Simulation configuration"))
+        sim.setToolTip(self.tr("Generates a config without hardware (one HMP4040, CH1/CH2)."))
         sim.clicked.connect(self._use_simulation)
         btns.addWidget(sim)
         btns.addStretch(1)
-        self.btn_generate = QtWidgets.QPushButton("Générer la configuration")
+        self.btn_generate = QtWidgets.QPushButton(self.tr("Generate the configuration"))
         self.btn_generate.setDefault(True)
         self.btn_generate.setEnabled(False)
         self.btn_generate.clicked.connect(self._generate)
@@ -127,8 +128,8 @@ class ConfigWizard(QtWidgets.QDialog):
         self.btn_scan.setEnabled(True)
         found = list(found or [])
         self.scan_status.setText(
-            f"{len(found)} instrument(s) détecté(s)." if found
-            else "Aucun instrument détecté — vérifier câblage/VISA, ou utiliser la simulation.")
+            self.tr("{} instrument(s) detected.").format(len(found)) if found
+            else self.tr("No instrument detected — check wiring/VISA, or use simulation."))
         self.scan_status.setStyleSheet(theme.style("text.muted"))
         self.table.setRowCount(0)
         for i, inst in enumerate(found, start=1):
@@ -167,13 +168,13 @@ class ConfigWizard(QtWidgets.QDialog):
         self.scan_status.setText("")
         r = QtWidgets.QMessageBox.question(
             self, "Ajouter une adresse manuelle",
-            f"Pas de réponse de {addr} :\n{msg}\n\n"
-            "Ajouter quand même cette adresse (à tester plus tard) ?",
+            self.tr("No response from {}:\n{}\n\n"
+                    "Add this address anyway (to test later)?").format(addr, msg),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         if r == QtWidgets.QMessageBox.Yes:
             self._add_row(f"PSU{self.table.rowCount() + 1}", "HMP4040", addr, "")
             self.btn_generate.setEnabled(True)
-            self.scan_status.setText(f"Adresse ajoutée sans test : {addr}")
+            self.scan_status.setText(self.tr("Address added without test: {}").format(addr))
             self.scan_status.setStyleSheet(theme.style("text.muted"))
 
     def _add_row(self, name, model, resource, idn) -> None:
@@ -216,7 +217,7 @@ class ConfigWizard(QtWidgets.QDialog):
                 }
         if not supplies:
             QtWidgets.QMessageBox.information(
-                self, "Assistant", "Cochez au moins une alimentation à inclure.")
+                self, self.tr("Wizard"), self.tr("Check at least one supply to include."))
             return
         self.result_config = {
             "simulate": False, "supplies": supplies, "channels": channels,

@@ -1,26 +1,27 @@
-## Objectif
-Que fait cette PR, et **pourquoi** (le besoin, pas seulement le changement) ?
+## Goal
+What does this PR do, and **why** (the need, not just the change)?
 
-Issue liée : #
+Linked issue: #
 
-## Changements
+## Changes
 -
 
 ## Type
-- [ ] Correctif
-- [ ] Fonctionnalité
-- [ ] Nouveau driver d'appareil
-- [ ] Documentation / interne
+- [ ] Bug fix
+- [ ] Feature
+- [ ] New device driver
+- [ ] Documentation / internal
 
-## Sûreté
-- [ ] Ne laisse jamais la carte alimentée en cas de problème (invariant de sûreté)
-- [ ] Ordre d'acquisition des verrous préservé (cf. `docs/DEVELOPPEMENT.md` §6)
-- [ ] Parité simulation / réel conservée (mock à jour)
+## Safety
+- [ ] Never leaves the board powered when something goes wrong (safety invariant)
+- [ ] Lock acquisition order preserved (see `docs/DEVELOPMENT.md` §6)
+- [ ] Simulation / real parity preserved (mock up to date)
 
 ## Tests
-- [ ] `python -m pytest` vert (simulation, sans matériel)
-- [ ] Test(s) ajouté(s) pour le comportement/correctif
-- [ ] Validé sur **matériel réel** (si driver ou sécurité) — préciser :
+- [ ] `python -m pytest` green (simulation, no hardware)
+- [ ] Test(s) added for the behavior/fix
+- [ ] Validated on **real hardware** (if driver or safety) — specify:
 
 ## Documentation
-- [ ] Docstrings / guides / `CHANGELOG.md` mis à jour si le comportement visible change
+- [ ] Docstrings / guides / `CHANGELOG.md` updated if visible behavior changes
+- [ ] User-facing strings wrapped + French catalogs updated (`tools/build-i18n.sh`), if applicable

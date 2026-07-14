@@ -1,15 +1,14 @@
 # ------------------------------------------------------------
-#  Séquence de COUPURE ordonnée (désalimentation)
-#  Référencée par `safety.shutdown_sequence` dans config.json :
-#  utilisée par le bouton « Séquentiel d'arrêt » ET par la
-#  sécurité thermique (extinction douce plutôt que coupure brutale).
+#  ORDERLY shutdown sequence (power-down)
+#  Referenced by `safety.shutdown_sequence` in config.json:
+#  used by the "Shutdown sequence" button AND by the thermal
+#  safety (soft switch-off rather than an abrupt cut-off).
 #
-#  Ordre : on retire d'abord la polarisation et l'étage de
-#  puissance, puis les rails — pour ne jamais laisser le drain
-#  alimenté sans contrôle de grille.
+#  Order: remove the bias and the power stage first, then the
+#  rails — so the drain is never left powered without gate control.
 # ------------------------------------------------------------
 
-LOG Coupure ordonnee en cours
+LOG Orderly shutdown in progress
 OFF VGATE
 WAIT 0.3
 OFF VDRAIN
@@ -18,4 +17,4 @@ OFF VAUX
 WAIT 0.2
 OFF VCC
 RELAY K_CHARGE OFF
-LOG Carte desalimentee
+LOG Board powered down

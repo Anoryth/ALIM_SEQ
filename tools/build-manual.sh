@@ -1,43 +1,44 @@
 #!/usr/bin/env bash
-# Génère le manuel utilisateur aux formats .pdf et .docx depuis le .md (source unique).
+# Build the user manual as .pdf and .docx from the .md sources (single source).
 #
-#   tools/build-manual.sh          # -> docs/MANUEL_UTILISATEUR.{pdf,docx}
+#   tools/build-manual.sh          # -> docs/{USER_MANUAL,MANUEL_UTILISATEUR}.{pdf,docx}
 #
-# Requiert pandoc (et un moteur LaTeX pour le PDF, ex. tectonic ou texlive).
-# Les sorties .pdf/.docx sont des artefacts RÉGÉNÉRABLES, ignorés par git : seul le
-# .md est versionné (et sert l'aide intégrée F1). Le build Windows embarque le .pdf
-# s'il est présent (packaging/ALIM_SEQ.spec) — lancer ce script avant un build pour
-# livrer un PDF à jour.
+# Requires pandoc (and a PDF engine, e.g. weasyprint or a LaTeX engine). The
+# .pdf/.docx outputs are REGENERABLE artifacts, git-ignored: only the .md is
+# versioned (and serves the built-in F1 help). The Windows build embeds the .pdf
+# if present (packaging/ALIM_SEQ.spec) — run this script before a build to ship an
+# up-to-date PDF. Both the English (USER_MANUAL) and French (MANUEL_UTILISATEUR)
+# manuals are built.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SRC="docs/MANUEL_UTILISATEUR.md"
-[ -f "$SRC" ] || { echo "Introuvable : $SRC" >&2; exit 1; }
 if ! command -v pandoc >/dev/null 2>&1; then
-  echo "pandoc absent — installer pandoc (+ un moteur LaTeX pour le PDF)." >&2
+  echo "pandoc missing — install pandoc (+ a PDF engine)." >&2
   exit 1
 fi
 
-echo "Génération $SRC -> .docx …"
-pandoc "$SRC" -o "docs/MANUEL_UTILISATEUR.docx" --toc
-
-# Moteur PDF : on privilégie un moteur COMPATIBLE UNICODE (le manuel contient ⚠, °C…).
-# pdflatex (défaut de pandoc) échoue sur ces caractères ; weasyprint (HTML→PDF, sans
-# dépendances LaTeX) ou xelatex conviennent.
-echo "Génération $SRC -> .pdf …"
+# PDF engine: prefer a UNICODE-COMPATIBLE engine (the manual contains ⚠, °C…).
+# pdflatex (pandoc's default) fails on those; weasyprint (HTML→PDF, no LaTeX deps)
+# or xelatex work.
 engine=""
 for e in weasyprint xelatex lualatex tectonic; do
   command -v "$e" >/dev/null 2>&1 && { engine="$e"; break; }
 done
-if [ -z "$engine" ]; then
-  echo "Aucun moteur PDF Unicode trouvé (weasyprint / xelatex / lualatex / tectonic)." >&2
-  echo ".docx généré ; installer un de ces moteurs pour le PDF." >&2
-  exit 0
-fi
-echo "  (moteur : $engine)"
-if pandoc "$SRC" -o "docs/MANUEL_UTILISATEUR.pdf" --toc --pdf-engine="$engine" 2>/dev/null; then
-  echo "OK : docs/MANUEL_UTILISATEUR.{docx,pdf}"
-else
-  echo "Échec de la génération PDF avec $engine — .docx OK." >&2
-  exit 1
-fi
+
+for name in USER_MANUAL MANUEL_UTILISATEUR; do
+  src="docs/${name}.md"
+  [ -f "$src" ] || { echo "Skipping missing: $src" >&2; continue; }
+  echo "Generating $src -> .docx …"
+  pandoc "$src" -o "docs/${name}.docx" --toc
+  if [ -z "$engine" ]; then
+    echo "No Unicode PDF engine found (weasyprint / xelatex / lualatex / tectonic)." >&2
+    echo ".docx generated for $name; install one of these engines for the PDF." >&2
+    continue
+  fi
+  echo "Generating $src -> .pdf  (engine: $engine) …"
+  if pandoc "$src" -o "docs/${name}.pdf" --toc --pdf-engine="$engine" 2>/dev/null; then
+    echo "OK: docs/${name}.{docx,pdf}"
+  else
+    echo "PDF generation failed for $name with $engine — .docx OK." >&2
+  fi
+done

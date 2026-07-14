@@ -289,7 +289,7 @@ def test_sequence_refusee_si_non_connecte(ctrl):
     ctrl.start_user_sequence([])
     assert ctrl.runner.is_running is False
     assert ctrl.essai is None
-    assert any("non connecté" in line for line in ctrl.drain_logs())
+    assert any("not connected" in line for line in ctrl.drain_logs())
 
 
 def test_sequence_refusee_si_deconnecte(ctrl):
@@ -297,4 +297,4 @@ def test_sequence_refusee_si_deconnecte(ctrl):
     ctrl.drain_logs()
     ctrl.start_user_sequence([])
     assert ctrl.runner.is_running is False
-    assert any("non connecté" in line for line in ctrl.drain_logs())
+    assert any("not connected" in line for line in ctrl.drain_logs())

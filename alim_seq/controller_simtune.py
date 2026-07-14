@@ -1,29 +1,31 @@
-"""Réglage à chaud du banc simulé — mixin du :class:`Controller`.
+"""Live tuning of the simulated bench — :class:`Controller` mixin.
 
-Extrait de ``controller.py`` (décomposition de l'objet-dieu) : installation des
-couplages grille→drain simulés et réglage en direct des charges, du modèle thermique
-et des couplages (onglet Simulation de l'IHM). Sans effet en mode réel. **Partage
-l'état** du contrôleur via ``self`` (``cfg``, ``_route``/``_routing``,
-``_instruments``, ``_instr_locks``, ``_daq``/``_daq_name``, ``_source_names``,
-``_set``, ``log``) — pur déplacement de code, zéro changement de comportement.
+Extracted from ``controller.py`` (god-object decomposition): installs the simulated
+gate→drain couplings and live-tunes the loads, the thermal model and the couplings
+(GUI's Simulation tab). No effect in real mode. **Shares the controller's state**
+via ``self`` (``cfg``, ``_route``/``_routing``, ``_instruments``, ``_instr_locks``,
+``_daq``/``_daq_name``, ``_source_names``, ``_set``, ``log``) — pure code move, zero
+behavior change.
 
-``_install_sim_couplings`` reste appelé par ``connect``/``reconnect`` du cœur.
+``_install_sim_couplings`` is still called by the core's ``connect``/``reconnect``.
 """
 
 from __future__ import annotations
 
 from typing import Dict, List
 
+from .i18n import _
+
 
 class SimTuneMixin:
-    """Couplages simulés + réglage à chaud de la simulation. Greffé sur ``Controller``."""
+    """Simulated couplings + live tuning of the simulation. Grafted onto ``Controller``."""
 
     def _install_sim_couplings(self) -> None:
-        """Installe le modèle simplifié grille->drain sur les alims simulées.
+        """Installs the simplified gate->drain model on the simulated supplies.
 
-        Pour chaque couplage : le courant de drain Id = gm*(Vgrille - vth), borné
-        à [0, imax], est imposé aux voies 'drains' (puits de courant) ; la grille
-        est rendue haute impédance (courant ~0). Aucun effet en mode réel.
+        For each coupling: the drain current Id = gm*(Vgate - vth), bounded to
+        [0, imax], is imposed on the 'drain' channels (current sink); the gate is
+        made high-impedance (current ~0). No effect in real mode.
         """
         if not self.cfg.simulate:
             return
@@ -52,32 +54,32 @@ class SimTuneMixin:
                 try:
                     psu, ch = self._route(d)
                 except KeyError:
-                    self.log(f"Couplage simu : voie drain inconnue {d!r}, ignorée.")
+                    self.log(_("Sim coupling: unknown drain channel {!r}, ignored.").format(d))
                     continue
                 if hasattr(psu, "set_current_source"):
                     psu.set_current_source(ch, source)
             try:
                 gpsu, gch = self._route(gate)
                 if hasattr(gpsu, "set_current_source"):
-                    gpsu.set_current_source(gch, lambda: 0.0)  # grille haute impédance
+                    gpsu.set_current_source(gch, lambda: 0.0)  # high-impedance gate
             except KeyError:
-                self.log(f"Couplage simu : grille inconnue {gate!r}.")
+                self.log(_("Sim coupling: unknown gate {!r}.").format(gate))
             self.log(
-                f"Couplage simu installé : {gate} -> {drains} "
-                f"(Id=gm*(Vg-{vth}), gm={gm}, imax={imax})"
+                _("Sim coupling installed: {} -> {} (Id=gm*(Vg-{}), gm={}, imax={})").format(
+                    gate, drains, vth, gm, imax)
             )
 
-    # ----------------------------------------- réglage à chaud de la simulation
-    # Défauts du modèle thermique (miroir de _make_daq_instrument).
+    # ----------------------------------------- live tuning of the simulation
+    # Thermal model defaults (mirrors _make_daq_instrument).
     _SIM_THERMAL_DEFAULTS = {
         "ambient_c": 25.0, "thermal_gain_c_per_w": 6.0,
         "thermal_tau_s": 8.0, "noise_c": 0.15,
     }
 
     def sim_params(self) -> Dict[str, object]:
-        """Paramètres de simulation courants (charges, modèle thermique, couplages),
-        complétés par leurs valeurs par défaut. Destiné à l'IHM de configuration de
-        la simulation. Vide de sens en mode réel."""
+        """Current simulation parameters (loads, thermal model, couplings),
+        completed with their default values. Intended for the simulation
+        configuration GUI. Meaningless in real mode."""
         sim = self.cfg.simulation
         loads = {}
         for label in self.cfg.channels:
@@ -89,9 +91,9 @@ class SimTuneMixin:
                 "couplings": [dict(c) for c in sim.get("couplings", [])]}
 
     def sim_set_load(self, label: str, ohms: float) -> None:
-        """Change à chaud la charge résistive simulée d'une voie (Ω). Sans effet hors
-        simulation. Met aussi à jour ``cfg.simulation`` (conservé au travers d'un
-        reconnect / d'un enregistrement de config)."""
+        """Live-changes a channel's simulated resistive load (Ω). No effect outside
+        simulation. Also updates ``cfg.simulation`` (kept across a reconnect / a
+        config save)."""
         if not self.cfg.simulate or label not in self.cfg.channels:
             return
         ohms = max(0.0, float(ohms))
@@ -103,8 +105,8 @@ class SimTuneMixin:
         self.cfg.simulation.setdefault("loads", {})[label] = ohms
 
     def sim_set_thermal(self, **params) -> None:
-        """Change à chaud le modèle thermique simulé (``ambient_c``,
-        ``thermal_gain_c_per_w``, ``thermal_tau_s``, ``noise_c``). Sans effet hors
+        """Live-changes the simulated thermal model (``ambient_c``,
+        ``thermal_gain_c_per_w``, ``thermal_tau_s``, ``noise_c``). No effect outside
         simulation."""
         if not self.cfg.simulate:
             return
@@ -125,12 +127,12 @@ class SimTuneMixin:
                     daq.noise = val
 
     def sim_set_couplings(self, couplings: List[dict]) -> None:
-        """Remplace à chaud les couplages grille→drain simulés et les réinstalle."""
+        """Live-replaces the simulated gate→drain couplings and reinstalls them."""
         if not self.cfg.simulate:
             return
         self.cfg.simulation["couplings"] = [dict(c) for c in couplings]
-        # On retire d'abord les sources de courant pilotées existantes (sinon un
-        # couplage supprimé/modifié laisserait sa source en place), puis on réinstalle.
+        # First removes the existing driven current sources (otherwise a
+        # removed/changed coupling would leave its source in place), then reinstalls.
         for name in self._source_names:
             inst = self._instruments[name]
             srcs = getattr(inst, "_current_source", None)

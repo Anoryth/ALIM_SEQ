@@ -4,6 +4,8 @@ subtitle: "Séquenceur d'alimentation R&S HMP4040 avec surveillance thermique"
 lang: fr-FR
 ---
 
+*(English: [USER_MANUAL.md](USER_MANUAL.md))*
+
 ## 1. Présentation
 
 ALIM_SEQ pilote une ou plusieurs alimentations de laboratoire Rohde & Schwarz

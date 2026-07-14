@@ -1,90 +1,92 @@
-# Dégraissage du build PyInstaller
+# Slimming the PyInstaller build
 
-Objectif : réduire la taille du build Windows (`dist/ALIM_SEQ/`, mode **onedir**)
-sans changer le comportement. L'application n'utilise que **QtCore/QtGui/QtWidgets**
-et **matplotlib backend Agg** (graphiques du rapport). `matplotlib` est une
-dépendance **voulue** ; on n'embarque que le strict nécessaire.
+Goal: reduce the size of the Windows build (`dist/ALIM_SEQ/`, **onedir** mode) without
+changing behavior. The application only uses **QtCore/QtGui/QtWidgets** and
+**matplotlib Agg backend** (report charts). `matplotlib` is a **wanted** dependency;
+only the strict minimum is bundled.
 
-## Méthode de mesure (reproductible)
+## Measurement method (reproducible)
 
 ```bash
-# build optimisé (défaut) puis baseline, et comparaison :
+# optimized build (default) then baseline, and comparison:
 pyinstaller --noconfirm --clean packaging/ALIM_SEQ.spec
-python packaging/taille_dist.py dist/ALIM_SEQ            # -> tailles "après"
+python packaging/taille_dist.py dist/ALIM_SEQ            # -> "after" sizes
 
 ALIM_SLIM=0 pyinstaller --noconfirm --clean packaging/ALIM_SEQ.spec
-python packaging/taille_dist.py dist/ALIM_SEQ            # -> tailles "avant" (baseline)
+python packaging/taille_dist.py dist/ALIM_SEQ            # -> "before" sizes (baseline)
 ```
 
-`ALIM_SLIM=0` désactive **uniquement** le dégraissage optionnel décrit ici (backends
-matplotlib, filtrage `mpl-data`, DLL/plugins Qt) ; les exclusions Qt de base
-(`_QT_HEAVY` : WebEngine, Quick/Qml, Multimedia, Charts, QtNetwork, QtSql, QtPdf…)
-restent dans les deux cas (elles étaient déjà validées sur la version onefile).
+`ALIM_SLIM=0` disables **only** the optional slimming described here (matplotlib
+backends, `mpl-data` filtering, Qt DLLs/plugins); the base Qt exclusions (`_QT_HEAVY`:
+WebEngine, Quick/Qml, Multimedia, Charts, QtNetwork, QtSql, QtPdf…) stay in both cases
+(they were already validated on the onefile version).
 
-La CI imprime `taille_dist.py` à chaque build (étape « Rapport de tailles du build »)
-et exécute un **canari de démarrage** (l'exe doit se lancer en simulation sans
-planter — garde-fou contre une exclusion trop agressive).
+The CI prints `taille_dist.py` on every build ("Build size report" step) and runs a
+**startup canary** (the exe must launch in simulation without crashing — a guard
+against an overly aggressive exclusion).
 
-## Familles d'exclusions (dans `packaging/ALIM_SEQ.spec`)
+## Exclusion families (in `packaging/ALIM_SEQ.spec`)
 
-| Famille | Ce qui est retiré | Pourquoi c'est sûr |
+| Family | What is removed | Why it is safe |
 |---|---|---|
-| **matplotlib backends** | tous les backends interactifs et ponts (`backend_qtagg`, `qt5agg`, `qt6agg`, `tkagg`, `gtk*`, `wx*`, `macosx`, `webagg`, `nbagg`, `qt_compat`) | le code n'importe que `matplotlib.figure` + `FigureCanvasAgg`. `backend_agg` **conservé**. |
-| **tkinter** | `tkinter`, `_tkinter` | aspirés par le hook matplotlib (`backend_tkagg`) ; l'app empaquetée est **Qt-only**. |
-| **tests** | `matplotlib.tests`, `numpy.tests` | jamais exécutés au runtime. |
-| **mpl-data** | `sample_data/`, `fonts/pdfcorefonts/`, `fonts/afm/` | métriques des backends PostScript/PDF (non utilisés par Agg) + jeux d'exemple. **Toutes les polices `fonts/ttf/` sont conservées** : ne garder que DejaVu Sans cassait le rendu matplotlib sur le build installé (v1.1.0 → corrigé en 1.1.1). |
-| **Qt modules** | `_QT_HEAVY` + `QtUiTools` ; `QtPdf` exclu (⚠ `QPdfWriter` est dans **QtGui**, vérifié) ; `QtNetwork` exclu (rien ne l'aspire) | déjà validé sur la version onefile testée. |
-| **DLL Qt** | `opengl32sw.dll` (repli OpenGL logiciel), `d3dcompiler_47.dll` (compilateur D3D) | l'IHM n'utilise pas OpenGL. *Si un poste labo a un rendu cassé avec des drivers exotiques, les réintégrer.* |
-| **Traductions Qt** | `PySide6/translations/*` | application monolingue, aucun `QTranslator`. |
-| **Plugins Qt** | `imageformats` sauf **qico/qpng/qjpeg** ; `multimedia`, `sqldrivers`, `qml`, `qmltooling`, `tls`, `networkinformation`, … | icône `.ico` (qico) + PNG du rapport (qpng/qjpeg). **Conservés** : `platforms/` (qwindows **vital**), `styles/`, `iconengines/`. |
+| **matplotlib backends** | all interactive backends and bridges (`backend_qtagg`, `qt5agg`, `qt6agg`, `tkagg`, `gtk*`, `wx*`, `macosx`, `webagg`, `nbagg`, `qt_compat`) | the code only imports `matplotlib.figure` + `FigureCanvasAgg`. `backend_agg` **kept**. |
+| **tkinter** | `tkinter`, `_tkinter` | pulled in by the matplotlib hook (`backend_tkagg`); the packaged app is **Qt-only**. |
+| **tests** | `matplotlib.tests`, `numpy.tests` | never run at runtime. |
+| **mpl-data** | `sample_data/`, `fonts/pdfcorefonts/`, `fonts/afm/` | metrics of the PostScript/PDF backends (not used by Agg) + example datasets. **All `fonts/ttf/` fonts are kept**: keeping only DejaVu Sans broke matplotlib rendering on the installed build (v1.1.0 → fixed in 1.1.1). |
+| **Qt modules** | `_QT_HEAVY` + `QtUiTools`; `QtPdf` excluded (⚠ `QPdfWriter` is in **QtGui**, verified); `QtNetwork` excluded (nothing pulls it) | already validated on the tested onefile version. |
+| **Qt DLLs** | `opengl32sw.dll` (software OpenGL fallback), `d3dcompiler_47.dll` (D3D compiler) | the GUI does not use OpenGL. *If a lab machine has broken rendering with exotic drivers, put them back.* |
+| **Qt translations** | `PySide6/translations/*` | these are Qt's own built-in dialog translations; the app ships its **own** catalogs (`.qm`/`.mo` under `alim_seq/`) and does not rely on Qt's standard-dialog localization. |
+| **Qt plugins** | `imageformats` except **qico/qpng/qjpeg**; `multimedia`, `sqldrivers`, `qml`, `qmltooling`, `tls`, `networkinformation`, … | `.ico` icon (qico) + report PNGs (qpng/qjpeg). **Kept**: `platforms/` (qwindows **vital**), `styles/`, `iconengines/`. |
 
-### Choix délibérés
-- **UPX : NON.** UPX compresse les DLL mais provoque des **faux positifs antivirus**
-  et casse certaines DLL Qt. Gain de taille non justifié face au risque. `upx=False`.
-- **numpy conservé** : dépendance dure de matplotlib.
-- **onedir** (dossier) plutôt que onefile : démarrage plus rapide, pas d'auto-
-  extraction temporaire (moins de faux positifs AV), et taille **mesurable**.
+### Deliberate choices
+- **UPX: NO.** UPX compresses the DLLs but causes **antivirus false positives** and
+  breaks some Qt DLLs. The size saving is not worth the risk. `upx=False`.
+- **numpy kept**: hard dependency of matplotlib.
+- **onedir** (folder) rather than onefile: faster startup, no temporary
+  self-extraction (fewer AV false positives), and a **measurable** size.
 
-## Mesures avant / après
+## Before / after measurements
 
-Builds Windows produits en CI (`taille_dist.py`). Baseline = `ALIM_SLIM=0`.
+Windows builds produced in CI (`taille_dist.py`). Baseline = `ALIM_SLIM=0`.
 
-| | Baseline | Optimisé | Gain |
+| | Baseline | Optimized | Saving |
 |---|---|---|---|
-| **Total `dist/ALIM_SEQ/`** | **180,7 Mio** (1999 fichiers) | **139,2 Mio** (848 fichiers) | **−41,5 Mio (~23 %)**, −1151 fichiers |
+| **Total `dist/ALIM_SEQ/`** | **180.7 MiB** (1999 files) | **139.2 MiB** (848 files) | **−41.5 MiB (~23 %)**, −1151 files |
 
-> Mesure ci-dessus faite en v1.1.0. En **1.1.1**, le jeu de polices `mpl-data`
-> complet (40 `.ttf`) est réintégré (correctif « polices manquantes ») :
-> total **143,8 Mio**, soit un gain net ramené à **~−20 %** (−36,9 Mio).
-| Installateur (`ALIM_SEQ-Setup.exe`, lzma2) | — | **≈ 46 Mo** | (79 Mo en onefile avant dégraissage) |
+> The measurement above was done in v1.1.0. In **1.1.1**, the full `mpl-data` font set
+> (40 `.ttf`) is reintegrated ("missing fonts" fix): total **143.8 MiB**, so a net
+> saving brought back to **~−20 %** (−36.9 MiB).
 
-Détail par famille (sous-dossiers de `_internal/`) :
+| Installer (`ALIM_SEQ-Setup.exe`, lzma2) | — | **≈ 46 MB** | (79 MB in onefile before slimming) |
 
-| Sous-dossier | Baseline | Optimisé | Gain | Cause |
+Detail per family (subfolders of `_internal/`):
+
+| Subfolder | Baseline | Optimized | Saving | Cause |
 |---|---|---|---|---|
-| `PySide6` | 90,3 Mio | 62,9 Mio | **−27,4 Mio** | `opengl32sw.dll` (~20 Mio) + `d3dcompiler_47.dll`, traductions (97 `.qm`), plugins inutiles |
-| `tcl`/`tk` (`_tcl_data`, `tcl86t.dll`, `tk86t.dll`, `_tk_data`) | ≈ 7,1 Mio | **0** | exclusion complète de **tkinter** (app Qt-only) |
-| `matplotlib` (`mpl-data`) | 13,7 Mio | 7,3 Mio | **−6,4 Mio** | fonts `afm`/`pdfcorefonts`/`sample_data` + `ttf` non-DejaVu |
+| `PySide6` | 90.3 MiB | 62.9 MiB | **−27.4 MiB** | `opengl32sw.dll` (~20 MiB) + `d3dcompiler_47.dll`, translations (97 `.qm`), useless plugins |
+| `tcl`/`tk` (`_tcl_data`, `tcl86t.dll`, `tk86t.dll`, `_tk_data`) | ≈ 7.1 MiB | **0** | complete exclusion of **tkinter** (Qt-only app) |
+| `matplotlib` (`mpl-data`) | 13.7 MiB | 7.3 MiB | **−6.4 MiB** | `afm`/`pdfcorefonts`/`sample_data` fonts + non-DejaVu `ttf` |
 
-Inchangés (dépendances dures) : `numpy.libs` (OpenBLAS, 20 Mio), `numpy`, `PIL`,
-`python312.dll`, `libcrypto`. `PIL` (10,7 Mio) est tiré par matplotlib —
-candidat à un dégraissage ultérieur (non fait : non validé).
+Unchanged (hard dependencies): `numpy.libs` (OpenBLAS, 20 MiB), `numpy`, `PIL`,
+`python312.dll`, `libcrypto`. `PIL` (10.7 MiB) is pulled by matplotlib — a candidate
+for later slimming (not done: not validated).
 
-## Validation — check-list Windows (à dérouler sur la version installée)
+## Validation — Windows checklist (run on the installed version)
 
-Le dégraissage peut casser **silencieusement** (l'app démarre mais une fonction
-périphérique meurt). À valider après installation, sur un vrai Windows :
+Slimming can break **silently** (the app starts but a peripheral function dies). To
+validate after installation, on a real Windows:
 
-1. **Démarrage** : l'exe s'ouvre en **simulation** (badge bleu), bascule de thème
-   (sombre/clair) OK, chaque onglet s'ouvre (Contrôle, Configuration, Éditeur,
-   Graphe). *(Le canari CI couvre déjà « l'exe démarre ».)*
-2. **Icône de fenêtre présente** dans la barre des tâches et le titre — **canari
-   des `imageformats`** (l'icône `.ico` doit se charger).
-3. **Enregistrement + séquence** : lancer un enregistrement, exécuter
-   `demo.seq`, la laisser finir.
-4. **Rapport** : générer le rapport d'essai → le **PDF contient les graphiques**
-   V/I et températures (**canari des exclusions matplotlib / mpl-data**) et
-   s'ouvre correctement, texte lisible (police DejaVu).
-5. Si l'exe **ne démarre plus** après une exclusion : suspecter `QtNetwork` (le
-   réintégrer et le noter ici). Si un **rendu est cassé** : suspecter un plugin
-   `imageformats`/`iconengines` ou une DLL OpenGL retirés.
+1. **Startup**: the exe opens in **simulation** (blue badge), theme toggle (dark/light)
+   OK, each tab opens (Control, Configuration, Editor, Chart). *(The CI canary already
+   covers "the exe starts".)*
+2. **Window icon present** in the taskbar and the title — **`imageformats` canary**
+   (the `.ico` icon must load).
+3. **Recording + sequence**: start a recording, run `demo.seq`, let it finish.
+4. **Report**: generate the test report → the **PDF contains the charts** V/I and
+   temperatures (**matplotlib / mpl-data exclusion canary**) and opens correctly, with
+   readable text (DejaVu font).
+5. **Language**: switch *View → Language* to English/French and restart — the UI must
+   be fully translated (**canary for the bundled `.qm`/`.mo` catalogs**).
+6. If the exe **no longer starts** after an exclusion: suspect `QtNetwork` (put it back
+   and note it here). If **rendering is broken**: suspect a removed `imageformats`/
+   `iconengines` plugin or an OpenGL DLL.

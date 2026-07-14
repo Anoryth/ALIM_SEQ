@@ -1,56 +1,58 @@
-# Contribuer à ALIM_SEQ
+# Contributing to ALIM_SEQ
 
-Merci de l'intérêt porté au projet. ALIM_SEQ est un **automate de test de banc sûr** :
-la sûreté et la parité simulation/réel priment sur tout le reste.
+Thanks for your interest in the project. ALIM_SEQ is a **safe bench-test automaton**:
+safety and simulation/real parity come before everything else.
 
-## Par où commencer
+## Where to start
 
-- **Comprendre le système** : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- **Reprendre le développement** : [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md)
-  (installation, tests, conventions, recettes pas-à-pas, **pièges à connaître**).
-- **Brancher un nouvel appareil** : [docs/GUIDE_DRIVERS.md](docs/GUIDE_DRIVERS.md).
-- **Utiliser l'application** : [docs/MANUEL_UTILISATEUR.md](docs/MANUEL_UTILISATEUR.md).
+- **Understand the system**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Pick up development**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+  (setup, tests, conventions, step-by-step recipes, **pitfalls to know**).
+- **Wire a new device**: [docs/GUIDE_DRIVERS.md](docs/GUIDE_DRIVERS.md).
+- **Use the application**: [docs/USER_MANUAL.md](docs/USER_MANUAL.md).
 
-## Mise en route
+## Getting set up
 
 ```bash
 pip install -r requirements-dev.txt      # pytest, pdoc
-python -m pytest                          # toute la suite (simulation, sans matériel)
-pip install -r requirements-qt.txt        # PySide6 + matplotlib + reportlab (IHM)
-python3 main.py                           # lance l'app (simulation par défaut)
+python -m pytest                          # the whole suite (simulation, no hardware)
+pip install -r requirements-qt.txt        # PySide6 + matplotlib + reportlab (GUI)
+python3 main.py                           # launch the app (simulation by default)
 ```
 
-Le mode **simulation** fonctionne sans aucun matériel : développez et testez ainsi,
-n'utilisez le matériel réel que pour la validation finale.
+**Simulation** mode works without any hardware: develop and test that way, use real
+hardware only for final validation.
 
-## Règles non négociables
+## Non-negotiable rules
 
-1. **Sûreté d'abord.** Toute modification touchant la puissance doit préserver
-   l'invariant : *on ne laisse jamais la carte alimentée en cas de problème*. En cas
-   de doute, on coupe. La boucle thermique et l'ordre des verrous sont critiques —
-   lire [DEVELOPPEMENT.md §6](docs/DEVELOPPEMENT.md) **avant** de toucher au contrôleur.
-2. **Parité simulation / réel.** Tout driver réel a un mock ; la suite de tests tourne
-   sans matériel ni réseau.
-3. **Tests.** Écrivez un test pour tout comportement métier ou correctif de sécurité.
-   La suite doit rester verte (`python -m pytest`).
-4. **Docs.** Mettez à jour la doc concernée (docstrings, guides, `CHANGELOG.md`) quand
-   le comportement visible change.
+1. **Safety first.** Any change touching power must preserve the invariant: *the board
+   is never left powered when something goes wrong*. When in doubt, cut off. The
+   thermal loop and the lock ordering are critical — read
+   [DEVELOPMENT.md §6](docs/DEVELOPMENT.md) **before** touching the controller.
+2. **Simulation / real parity.** Every real driver has a mock; the test suite runs
+   without hardware or network.
+3. **Tests.** Write a test for any business behavior or safety fix. The suite must stay
+   green (`python -m pytest`).
+4. **Docs.** Update the relevant documentation (docstrings, guides, `CHANGELOG.md`)
+   when visible behavior changes.
 
-## Flux de contribution
+## Contribution flow
 
-1. Créez une branche à partir de `main`.
-2. Développez et **testez en simulation**.
-3. Validez sur **matériel réel** si vous touchez un driver ou la sécurité.
-4. Mettez à jour [CHANGELOG.md](CHANGELOG.md).
-5. Ouvrez une Pull Request décrivant le *pourquoi* (pas seulement le *quoi*) et, pour
-   un driver, l'appareil ciblé et ce qui a été validé.
+1. Create a branch off `main`.
+2. Develop and **test in simulation**.
+3. Validate on **real hardware** if you touch a driver or the safety logic.
+4. Update [CHANGELOG.md](CHANGELOG.md).
+5. Open a Pull Request describing the *why* (not just the *what*) and, for a driver,
+   the targeted device and what was validated.
 
-## Langue
+## Language
 
-Application, IHM et documentation en **français** ; les clés de configuration sont en
-anglais. Respectez le style du fichier que vous modifiez.
+The application, GUI and documentation are **bilingual (English / French)** with
+English as the base language; configuration keys are in English. User-facing strings
+go through the translation catalogs (`tools/build-i18n.sh` — see
+[DEVELOPMENT.md](docs/DEVELOPMENT.md)). Follow the style of the file you edit.
 
-## Licence
+## License
 
-En contribuant, vous acceptez que votre contribution soit distribuée sous la licence
-du projet, **GNU GPL-3.0** (voir [LICENSE](LICENSE)).
+By contributing, you agree that your contribution is distributed under the project
+license, **GNU GPL-3.0** (see [LICENSE](LICENSE)).

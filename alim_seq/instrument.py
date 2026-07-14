@@ -20,6 +20,7 @@ fabrique) : ``psu`` et ``daq`` importent leurs capacités d'ici, sans cycle.
 from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional
+from .i18n import _
 
 
 # --------------------------------------------------------------- cycle de vie
@@ -159,7 +160,7 @@ def create_instrument(driver: str, simulate: bool = True, name: str = "",
     if key in _NIDAQ_ALIASES:
         sensors = params.get("sensors")
         if sensors is None:
-            raise ValueError("Driver NI-DAQ : paramètre 'sensors' requis.")
+            raise ValueError(_("NI-DAQ driver: 'sensors' parameter required."))
         if simulate:
             from .daq import MockDAQ
             provider = params.get("power_provider") or (lambda: 0.0)

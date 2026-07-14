@@ -1,242 +1,245 @@
-# Journal des modifications
+# Changelog
 
-Toutes les modifications notables d'ALIM_SEQ sont consignées ici.
-Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
-versionnage [SemVer](https://semver.org/lang/fr/).
+All notable changes to ALIM_SEQ are recorded here.
+Format inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+versioning [SemVer](https://semver.org/).
+
+## [1.3.1] — 2026-07-14
+
+### Added
+- **Bilingual interface (English / French).** The whole application is now
+  internationalized with **English as the base language** and French provided via
+  translation catalogs. The language is selectable at runtime via *View → Language*
+  (persisted, default = system locale, English fallback). GUI strings go through Qt
+  `tr()` (`.ts`/`.qm`), the non-Qt domain layer through gettext (`alim_seq/i18n.py`,
+  `.po`/`.mo`); the test report and its charts, logs, and all error messages are
+  localized (decimal separator follows the language). Tooling: `tools/build-i18n.sh`
+  (extract + compile) and `tools/compile_catalogs.py` (compile-only, cross-platform,
+  used by the Windows CI). Documentation is English-canonical; the README and user
+  manual are bilingual (`README.md`/`README.fr.md`,
+  `docs/USER_MANUAL.md`/`docs/MANUEL_UTILISATEUR.md`).
 
 ## [1.3.0] — 2026-07-13
 
-### Ajouté
-- **Configuration et séquences de démonstration** livrées par défaut : un scénario de
-  simulation complet (rails, groupe série, capteur thermique, couplage grille→drain
-  pour le SERVO, relais) et plusieurs séquences (`demo.seq`, `servo_bias.seq`,
-  `balayage_polarisation.seq`, `arret.seq` — coupure ordonnée) pour découvrir l'outil
-  immédiatement.
-- **Assistant de configuration** (au premier lancement, ou *Fichier → Assistant de
-  configuration…*) : voie **simulation** (config sans matériel), **scan VISA**
-  (USB-TMC / LAN VXI-11) ou **saisie d'une adresse manuelle** — indispensable pour le
-  **mode socket LAN** (`::5025::SOCKET`) qu'un scan ne peut pas découvrir : l'adresse
-  est testée (`*IDN?`) puis ajoutée. Génère `supplies` + voies pré-remplies, chargées
-  dans l'éditeur pour revue avant application. Nouveau `psu.probe_instrument`.
-- **Relecture d'essai** (*Fichier → Rouvrir un essai*) : fenêtre rejouant les courbes
-  d'un dossier `logs/essais/…` — bascule Températures/Courants/Tensions, **curseur de
-  lecture** des valeurs, **repères d'événements** numérotés (marqueurs 📌, alertes,
-  sécurité), export PNG et génération du rapport PDF. L'application devient un outil
-  d'**analyse**, plus seulement un enregistreur.
-- **Comparaison de deux essais** (*Fichier → Comparer deux essais*) : superpose les
-  courbes de deux dossiers (recalées sur t=0, séries `A·`/`B·`, une couleur par série)
-  pour visualiser une **dérive avant/après** modification de la carte.
-- **Allumage en deux temps (matériel réel)** : en mode réel, le 1ᵉʳ clic sur ON
-  affiche « ⚠ Armer ? », un 2ᵉ clic (sous 3 s) allume — filet contre le clic
-  malheureux. Direct en simulation ; `Maj+clic` force l'allumage immédiat.
-- **Indicateur d'état périmé** : quand l'instrument d'une voie ne répond plus (liaison
-  figée), ses V/I mesurés sont **grisés** et le mode affiche « ⏱ figé » — plus d'« OFF
-  fantôme » ni de mesure figée passant pour vivante (complète le correctif de la boucle
-  V/I à verrou timeouté).
-- **Marqueur opérateur (📌 / Ctrl+M)** : pose une note horodatée au journal, reprise
-  comme repère vertical sur le graphe temps réel **et** comme badge numéroté dans le
-  rapport d'essai (« c'est ici que… »).
-- **Lint en direct de l'éditeur de séquence** : validation au fil de la frappe
-  (debounce 300 ms), statut ✓/✗ et **soulignage rouge de la ligne fautive**, sans
-  attendre le bouton « Vérifier ».
-- **Smokes IHM** (`tests/test_gui_smoke.py`) : filet de test offscreen sur la
-  construction, les onglets, le rafraîchissement et les interactions clés de l'IHM.
+### Added
+- **Demo configuration and sequences** shipped by default: a complete simulation
+  scenario (rails, series group, thermal sensor, gate→drain coupling for the SERVO,
+  relay) and several sequences (`demo.seq`, `servo_bias.seq`,
+  `balayage_polarisation.seq`, `arret.seq` — orderly shutdown) to discover the tool
+  immediately.
+- **Configuration wizard** (on first launch, or *File → Configuration wizard…*):
+  **simulation** path (config without hardware), **VISA scan** (USB-TMC / LAN VXI-11)
+  or **manual address entry** — essential for the **LAN socket mode**
+  (`::5025::SOCKET`) that a scan cannot discover: the address is tested (`*IDN?`) then
+  added. Generates `supplies` + pre-filled channels, loaded into the editor for review
+  before applying. New `psu.probe_instrument`.
+- **Test replay** (*File → Reopen a test*): a window replaying the curves of a
+  `logs/essais/…` folder — Temperatures/Currents/Voltages toggle, value **read
+  cursor**, numbered **event markers** (📌 markers, warnings, safety), PNG export and
+  PDF report generation. The application becomes an **analysis** tool, not just a
+  recorder.
+- **Comparison of two tests** (*File → Compare two tests*): overlays the curves of two
+  folders (aligned on t=0, series `A·`/`B·`, one color per series) to visualize a
+  **before/after drift** after a change to the board.
+- **Two-step switch-on (real hardware)**: in real mode, the 1st click on ON shows "⚠
+  Arm?", a 2nd click (within 3 s) switches on — a net against the unfortunate click.
+  Direct in simulation; `Shift+click` forces immediate switch-on.
+- **Stale-state indicator**: when a channel's instrument stops responding (frozen
+  link), its measured V/I are **greyed out** and the mode shows "⏱ frozen" — no more
+  "ghost OFF" nor a frozen measurement passing as live (complements the timeout-locked
+  V/I loop fix).
+- **Operator marker (📌 / Ctrl+M)**: places a timestamped note in the log, reused as a
+  vertical marker on the real-time chart **and** as a numbered badge in the test report
+  ("this is where…").
+- **Live lint of the sequence editor**: validation as you type (300 ms debounce), ✓/✗
+  status and **red underline of the faulty line**, without waiting for the "Check"
+  button.
+- **GUI smoke tests** (`tests/test_gui_smoke.py`): an offscreen test net on the
+  construction, tabs, refresh and key interactions of the GUI.
 
-### Changé (technique)
-- **Décomposition de `controller.py`** (objet-dieu, 1830 → 1479 lignes) par **mixins**,
-  **cœur sûreté intact** : extraction de l'enregistrement CSV/dossier d'essai
-  (`controller_recording.py`), de l'asservissement (`controller_servo.py`) et des
-  couplages simulés + réglage à chaud (`controller_simtune.py`). Pur déplacement de
-  code (même état `self`), zéro changement de comportement.
+### Changed (technical)
+- **Decomposition of `controller.py`** (god object, 1830 → 1479 lines) into **mixins**,
+  **safety core intact**: extraction of CSV/test-folder recording
+  (`controller_recording.py`), servo control (`controller_servo.py`) and simulated
+  couplings + live tuning (`controller_simtune.py`). Pure code move (same `self`
+  state), zero behavior change.
 
-### Corrigé / sûreté
-- Note de **sécurité réseau** au manuel (SCPI/TCPIP sans authentification → banc isolé).
-- `stop_polling` ne joint que les threads réellement démarrés (garde `t.ident`) —
-  robustesse si un `start()` échoue.
+### Fixed / safety
+- **Network safety** note added to the manual (SCPI/TCPIP without authentication →
+  isolated bench).
+- `stop_polling` only joins threads that actually started (guard `t.ident`) —
+  robustness if a `start()` fails.
 
 ## [1.2.1] — 2026-07-12
 
-### Sécurité
-- **Thermocouples : détection de défaut.** Une emf hors de la plage de validité du
-  polynôme NIST (entrée flottante, rail, ampli saturé) retourne désormais **NaN →
-  DÉFAUT** au lieu d'une température extravagante mais « numérique ». La validation
-  **exige** `valid_min`/`valid_max` pour un thermocouple (seul filet logiciel contre
-  un TC débranché — un TC ouvert lisant ~0 V reste indétectable en logiciel :
-  limitation documentée, préférer un module avec *open-TC detect*).
-- **Arrêt d'urgence : relais mis à l'état de sécurité APRÈS l'armement du trip** —
-  une fermeture de relais concurrente ne peut plus se glisser entre l'isolement et
-  le verrouillage ; `set_relay` re-vérifie aussi le trip sous le verrou instrument.
+### Security
+- **Thermocouples: fault detection.** An emf outside the NIST polynomial's validity
+  range (floating input, rail, saturated amplifier) now returns **NaN → FAULT** instead
+  of an extravagant but "numeric" temperature. Validation **requires**
+  `valid_min`/`valid_max` for a thermocouple (the only software net against a
+  disconnected TC — an open TC reading ~0 V stays undetectable in software: documented
+  limitation, prefer a module with *open-TC detect*).
+- **Emergency stop: relays set to the safe state AFTER arming the trip** — a concurrent
+  relay closing can no longer slip between the isolation and the locking; `set_relay`
+  also re-checks the trip under the instrument lock.
 
-### Corrigé
-- **Validation : les convertisseurs de température sont construits dès le chargement**
-  de la configuration — un paramètre aberrant (`alpha=0`, `beta=0`, clé manquante,
-  table vide…) est refusé à la validation au lieu de provoquer une erreur (jusqu'à
-  une `ZeroDivisionError`) à la **première mesure**, dans la boucle de sécurité.
-- **Dossiers d'essai : anti-collision.** Deux essais démarrés dans la même seconde
-  (stop/start rapide) partageaient le même dossier et le second **écrasait**
-  `mesures.csv`. Suffixe `_2`, `_3`… + création atomique.
-- **Boucle de mesure V/I : plus de blocage silencieux.** Le verrou de chaque alim est
-  acquis **avec timeout** : une liaison VISA figée (socket mort) ne bloque plus la
-  lecture des autres alims ni la boucle entière — l'alim indisponible est sautée
-  (dernières valeurs conservées, pas de faux 0 V au CSV) et l'anomalie journalisée.
-- **Reconnexion sérialisée** : le chien de garde (`auto_reconnect`) et le bouton
-  « Reconnecter » pouvaient reconstruire les instruments **en même temps** ; la
-  seconde demande est désormais refusée proprement.
-- **Séquences : opérateur `!=` accepté** (`WAIT_CURRENT`/`WAIT_TEMP`) — l'aide de
-  l'éditeur l'annonçait mais la validation le refusait ; `==` documenté partout.
-- **IHM relais : plus d'« OFF fantôme »** — l'affichage ressert la dernière lecture
-  réussie quand le verrou instrument est momentanément occupé.
-- **Éditeur de config : une sortie « fermée à l'arrêt » absente de la colonne
-  Sorties** est ajoutée aux sorties au lieu d'être ignorée en silence.
+### Fixed
+- **Validation: temperature converters are built as soon as the configuration is
+  loaded** — an aberrant parameter (`alpha=0`, `beta=0`, missing key, empty table…) is
+  refused at validation instead of causing an error (up to a `ZeroDivisionError`) at
+  the **first measurement**, in the safety loop.
+- **Test folders: collision guard.** Two tests started in the same second (fast
+  stop/start) shared the same folder and the second one **overwrote** `mesures.csv`.
+  `_2`, `_3`… suffix + atomic creation.
+- **V/I measurement loop: no more silent blocking.** Each supply's lock is acquired
+  **with a timeout**: a frozen VISA link (dead socket) no longer blocks the reading of
+  the other supplies nor the whole loop — the unavailable supply is skipped (last
+  values kept, no false 0 V in the CSV) and the anomaly logged.
+- **Serialized reconnection**: the watchdog (`auto_reconnect`) and the "Reconnect"
+  button could rebuild the instruments **at the same time**; the second request is now
+  cleanly refused.
+- **Sequences: `!=` operator accepted** (`WAIT_CURRENT`/`WAIT_TEMP`) — the editor help
+  announced it but validation refused it; `==` documented everywhere.
+- **Relay GUI: no more "ghost OFF"** — the display reuses the last successful reading
+  when the instrument lock is momentarily busy.
+- **Config editor: an output "closed at shutdown" absent from the Outputs column** is
+  added to the outputs instead of being silently ignored.
 
 ## [1.2.0] — 2026-07-12
 
-### Ajouté
-- **IHM — onglet Simulation (réglage à chaud).** En mode simulation, un onglet
-  **🧪 Simulation** permet de régler **en direct** les charges résistives par voie,
-  le modèle thermique (ambiante, gain °C/W, constante de temps, bruit) et les
-  couplages grille→drain (gm, vth, imax), avec effet immédiat visible dans l'onglet
-  *Contrôle*. Primitives contrôleur `sim_params`/`sim_set_load`/`sim_set_thermal`/
-  `sim_set_couplings` (appliquées aux mocks et à `cfg.simulation`, donc conservées au
-  reconnect ; sans effet hors simulation). Objectif : reproduire fidèlement le
-  comportement d'un montage sans matériel.
-- **IHM — prise en charge des relais.** Onglet *Contrôle* : cadre **Relais** avec
-  l'état de chaque sortie et un bouton ON/OFF (mêmes garde-fous que les voies : fermeture
-  refusée sous sécurité armée, commandes gelées pendant une (re)connexion). Onglet
-  *Configuration* : sous-onglet **Relais** pour déclarer les instruments relais et
-  leurs sorties (dont l'état de sécurité). Aide/complétion de la commande `RELAY` dans
-  l'éditeur de séquence.
-- **Configuration — fusion `instruments` + `supplies`/`daq`.** Une config peut
-  combiner des sources décrites en `supplies` (legacy) ET des instruments en
-  `instruments` (ex. relais) sans que les unes masquent les autres : les deux sont
-  fusionnées (`AppConfig.__post_init__`), les entrées `instruments` explicites primant.
-- **Pilotage de relais / actionneurs** (capacité `Actionneur`). Nouveau
-  driver `alim_seq/relay.py` (`BaseRelay`/`MockRelay`). Un relais se déclare comme un
-  instrument de la section `instruments` (driver `MOCK-RELAY`) avec ses `outputs` ;
-  chaque sortie a un `safe_state` (défaut OFF/ouvert). Nouvelle commande de séquence
-  **`RELAY <sortie> ON|OFF`** ; primitives contrôleur `set_relay`/`relay_state` et
-  états exposés dans le `snapshot`. Les relais **participent à la désalimentation de
-  sécurité** : ils sont ramenés à leur `safe_state` à l'arrêt d'urgence et en fin de
-  désalimentation ordonnée (ouvrir un relais isole la carte). Le `MockRelay` sert la
-  simulation et de relais « virtuel » tant qu'aucun modèle matériel n'est câblé.
-- **Configuration : section unifiée `instruments`.** La chaîne d'appareils peut
-  désormais se décrire dans une seule section `instruments` (chaque entrée : un
-  `driver` + ses paramètres), sans présager de catégories. Les sections historiques
-  `supplies`/`daq` restent acceptées (**sucre rétrocompatible**) : `instruments` fait
-  foi et les deux vues sont maintenues cohérentes (`AppConfig.__post_init__`). Les
-  `config.json` et configs d'essai existants se rechargent sans modification.
+### Added
+- **GUI — Simulation tab (live tuning).** In simulation mode, a **🧪 Simulation** tab
+  lets you tune **live** the resistive loads per channel, the thermal model (ambient,
+  °C/W gain, time constant, noise) and the gate→drain couplings (gm, vth, imax), with
+  an immediate effect visible in the *Control* tab. Controller primitives
+  `sim_params`/`sim_set_load`/`sim_set_thermal`/`sim_set_couplings` (applied to the
+  mocks and to `cfg.simulation`, hence kept across reconnect; no effect outside
+  simulation). Goal: faithfully reproduce a setup's behavior without hardware.
+- **GUI — relay support.** *Control* tab: a **Relays** frame with each output's state
+  and an ON/OFF button (same guards as the channels: closing refused under armed
+  safety, commands frozen during a (re)connection). *Configuration* tab: a **Relays**
+  sub-tab to declare relay instruments and their outputs (including the safe state).
+  Help/completion of the `RELAY` command in the sequence editor.
+- **Configuration — merge of `instruments` + `supplies`/`daq`.** A config can combine
+  sources described in `supplies` (legacy) AND instruments in `instruments` (e.g.
+  relays) without one masking the other: both are merged
+  (`AppConfig.__post_init__`), explicit `instruments` entries taking precedence.
+- **Relay / actuator control** (`Actionneur` capability). New driver
+  `alim_seq/relay.py` (`BaseRelay`/`MockRelay`). A relay is declared as an instrument
+  of the `instruments` section (driver `MOCK-RELAY`) with its `outputs`; each output
+  has a `safe_state` (default OFF/open). New sequence command **`RELAY <output>
+  ON|OFF`**; controller primitives `set_relay`/`relay_state` and states exposed in the
+  `snapshot`. Relays **take part in the safety power-down**: they are brought back to
+  their `safe_state` on the emergency stop and at the end of an orderly power-down
+  (opening a relay isolates the board). The `MockRelay` serves the simulation and as a
+  "virtual" relay as long as no hardware model is wired.
+- **Configuration: unified `instruments` section.** The device chain can now be
+  described in a single `instruments` section (each entry: a `driver` + its
+  parameters), without presuming categories. The historical `supplies`/`daq` sections
+  stay accepted (**backward-compatible sugar**): `instruments` is authoritative and
+  both views are kept consistent (`AppConfig.__post_init__`). Existing `config.json`
+  and test configs reload without modification.
 
-### Changé (technique)
-- **Abstraction des appareils par capacités — phases 1 à 3** (structurant, sans
-  changement de comportement). Nouveau module `alim_seq/instrument.py` : un
-  `Instrument` (cycle de vie `connect`/`close` + identité) déclare les **capacités**
-  qu'il expose — `SourceTension` (tension + limite de courant), `MesureVI`,
-  `MesureTemperature`, `Actionneur` — au lieu d'être figé en « alim » ou « DAQ ».
-  Les drivers existants adoptent ces capacités (`BasePSU` → `SourceTension`+`MesureVI`,
-  `BaseDAQ` → `MesureTemperature`) et un **registre unifié** `INSTRUMENTS` /
-  `create_instrument` généralise `PSU_MODELS`/`create_psu`. Le **contrôleur** est
-  généralisé : un **verrou par instrument** (`_instr_locks`, remplace
-  `_psu_locks`+`_daq_lock`, ordre invariant élargi à l'ordre alphabétique des noms),
-  pilotage et boucles **par capacité**, routage label→(instrument, voie) centralisé ;
-  `PSUManager` est **supprimé**. Le contrôleur construit désormais ses instruments
-  depuis la section `instruments` (chaque entrée classée par capacité via son
-  `driver`), ce qui permettra d'ajouter les relais sans toucher au cœur. Prépare la
-  modularité de la chaîne d'appareils.
+### Changed (technical)
+- **Capability-based device abstraction — phases 1 to 3** (structuring, no behavior
+  change). New module `alim_seq/instrument.py`: an `Instrument` (lifecycle
+  `connect`/`close` + identity) declares the **capabilities** it exposes —
+  `SourceTension` (voltage + current limit), `MesureVI`, `MesureTemperature`,
+  `Actionneur` — instead of being frozen as a "supply" or "DAQ". The existing drivers
+  adopt these capabilities (`BasePSU` → `SourceTension`+`MesureVI`, `BaseDAQ` →
+  `MesureTemperature`) and a **unified registry** `INSTRUMENTS` / `create_instrument`
+  generalizes `PSU_MODELS`/`create_psu`. The **controller** is generalized: one **lock
+  per instrument** (`_instr_locks`, replaces `_psu_locks`+`_daq_lock`, invariant order
+  widened to the alphabetical order of names), control and loops **by capability**,
+  centralized label→(instrument, channel) routing; `PSUManager` is **removed**. The
+  controller now builds its instruments from the `instruments` section (each entry
+  classified by capability via its `driver`), which will allow adding relays without
+  touching the core. Prepares the modularity of the device chain.
 
-### Changé
-- **Suppression de l'IHM Tkinter.** L'interface **Qt (PySide6)** devient l'unique
-  IHM : `alim_seq/gui.py` est retiré et l'option `--gui` disparaît (l'application
-  lance toujours Qt). Conséquence : PySide6 est désormais requis pour lancer
-  l'application, y compris en simulation — les **tests**, eux, ne requièrent aucune
-  IHM (ils pilotent le `Controller` directement). Objectif : supprimer l'entropie
-  de maintenance de deux interfaces et préparer la modularisation des appareils
- .
+### Changed
+- **Removal of the Tkinter GUI.** The **Qt (PySide6)** interface becomes the only GUI:
+  `alim_seq/gui.py` is removed and the `--gui` option disappears (the application
+  always launches Qt). Consequence: PySide6 is now required to launch the application,
+  including in simulation — the **tests**, however, require no GUI (they drive the
+  `Controller` directly). Goal: remove the maintenance entropy of two interfaces and
+  prepare the modularization of the devices.
 
 ## [1.1.2] — 2026-07-11
 
-### Modifié
-- **Rapport d'essai — refonte de la lisibilité et de la mise en page.**
-  - **Graphiques** : palette catégorielle fixe et validée (une voie = une couleur
-    sur les cadrans V et I), couleurs de statut réservées pour les seuils
-    (alerte/critique) et le déclenchement, et surtout **bandeau d'événements à
-    badges numérotés anti-collision** remplaçant les étiquettes qui se
-    chevauchaient et rendaient le graphe illisible. Titre renommé
-    « Mesures pendant l'essai ».
-  - **Mise en page PDF** : **une page par partie**, tableaux centrés pleine
-    largeur à en-têtes colorés et zébrures, pied de page paginé « page X / N »,
-    en-tête courant (nom d'essai), notes de légende sous les tableaux. Colonne
-    « Excursions » clarifiée en « Dépassements ».
+### Changed
+- **Test report — readability and layout overhaul.**
+  - **Charts**: fixed, validated categorical palette (one channel = one color on the V
+    and I panels), status colors reserved for the thresholds (warning/critical) and the
+    trip, and above all a **numbered-badge event strip with anti-collision** replacing
+    the labels that overlapped and made the chart unreadable. Title renamed
+    "Measurements during the test".
+  - **PDF layout**: **one page per part**, centered full-width tables with colored
+    headers and zebra stripes, paginated "page X / N" footer, running header (test
+    name), legend notes below the tables. "Excursions" column clarified.
 
-### Changé (technique)
-- **Génération du PDF : passage de Qt (`QTextDocument`/`QPdfWriter`) à
-  ReportLab** (pur Python). Le rapport ne dépend plus de PySide6 : la couche
-  données reste testable sans dépendance, `construire_html` demeure pour l'aperçu
-  navigateur, et les graphiques restent tracés par matplotlib (backend Agg).
-  Nouvelle dépendance `reportlab` (embarquée au build PyInstaller).
+### Changed (technical)
+- **PDF generation: move from Qt (`QTextDocument`/`QPdfWriter`) to ReportLab** (pure
+  Python). The report no longer depends on PySide6: the data layer stays testable
+  without a dependency, `construire_html` remains for the browser preview, and the
+  charts are still plotted by matplotlib (Agg backend). New dependency `reportlab`
+  (bundled at PyInstaller build).
 
 ## [1.1.1] — 2026-07-06
 
-### Corrigé
-- **Rapport : polices matplotlib manquantes sur le build installé.** Le
-  dégraissage `mpl-data` ne conservait que la police DejaVu Sans, ce qui cassait
-  le rendu des graphiques du rapport (« il manque des polices »). **Toutes** les
-  polices `fonts/ttf/` sont désormais embarquées (le gain de ~2 Mo ne justifiait
-  pas la régression). Validé sur matériel réel.
+### Fixed
+- **Report: missing matplotlib fonts on the installed build.** The `mpl-data`
+  slimming kept only the DejaVu Sans font, which broke the rendering of the report
+  charts ("fonts are missing"). **All** the `fonts/ttf/` fonts are now bundled (the
+  ~2 MB saving did not justify the regression). Validated on real hardware.
 
 ## [1.1.0] — 2026-07-05
 
-### Ajouté
-- **Rapport d'essai enrichi** (`rapport.py`) :
-  - événements du journal (messages `LOG` de séquence, alertes, événements de
-    sécurité) **matérialisés sur les courbes** V/I et températures, recalés sur
-    l'axe des temps du CSV ;
-  - **graphique de zoom sur le déclenchement** de sécurité (fenêtre ±30 s autour
-    du trip, capteur en cause en trait épais, seuils alerte/critique, zone
-    critique ombrée) ;
-  - **statistiques enrichies** : temps en limitation de courant (CC) par voie
-    (en s et %), consignes début/fin ; excursions de température (nombre de
-    passages en alerte, durées cumulées au-dessus de l'alerte et du critique) ;
-    ligne de synthèse (points, cadence effective, taille du CSV) ;
-  - **mise en page** : logo en en-tête, **pied de page paginé**, zone de visa
-    opérateur, annexe configuration lisible (tableaux voies/capteurs avant le
-    JSON brut), nombres au **format français**.
-- **Toolchain de build** : construction des exécutables via CI auto-hébergée
-  (Forgejo + VM Windows **à la demande**), commande unique `tools/lab-build.sh
-  <tag>`, documentation `docs/TOOLCHAIN.md` et `docs/ARCHITECTURE.md`.
-- **Aide intégrée** : manuel utilisateur consultable dans l'application (touche
-  **F1**) et fourni en `.md`/`.docx`/`.pdf` (`docs/`).
+### Added
+- **Enriched test report** (`rapport.py`):
+  - log events (sequence `LOG` messages, warnings, safety events) **materialized on the
+    curves** V/I and temperatures, aligned on the CSV time axis;
+  - **zoom chart on the safety trip** (±30 s window around the trip, offending sensor
+    in a thick line, warning/critical thresholds, shaded critical zone);
+  - **enriched statistics**: time in current limiting (CC) per channel (in s and %),
+    start/end setpoints; temperature excursions (number of warning crossings, cumulated
+    durations above warning and critical); a summary line (points, actual rate, CSV
+    size);
+  - **layout**: logo in the header, **paginated footer**, operator sign-off area,
+    readable configuration appendix (channel/sensor tables before the raw JSON).
+- **Build toolchain**: building the executables via a self-hosted CI (Forgejo +
+  **on-demand** Windows VM), single command `tools/lab-build.sh <tag>`, documentation
+  in `docs/ARCHITECTURE.md`.
+- **Built-in help**: user manual viewable in the application (**F1** key) and provided
+  as `.md`/`.docx`/`.pdf` (`docs/`).
 
-### Modifié
-- **Build allégé** (`packaging/ALIM_SEQ.spec`) : passage en **onedir** et
-  exclusions ciblées — matplotlib **backend Agg** seul, pas de tkinter ni
-  d'OpenGL logiciel, traductions et plugins Qt inutiles retirés, `mpl-data`
-  filtré (police DejaVu Sans conservée). **≈ −23 %** (180,7 → 139,2 Mio),
-  installateur ≈ 46 Mo. Détails et check-list de validation :
+### Changed
+- **Slimmed build** (`packaging/ALIM_SEQ.spec`): move to **onedir** and targeted
+  exclusions — matplotlib **Agg backend** only, no tkinter or software OpenGL, useless
+  Qt translations and plugins removed, `mpl-data` filtered (DejaVu Sans font kept).
+  **≈ −23 %** (180.7 → 139.2 MiB), installer ≈ 46 MB. Details and validation checklist:
   `packaging/OPTIMISATION.md`.
-- Configuration livrée **neutre** (voies génériques `CH1`/`CH2`, démarrage en
-  **simulation**), séquence d'exemple unique.
+- Shipped configuration made **neutral** (generic channels `CH1`/`CH2`, startup in
+  **simulation**), single example sequence.
 
 ## [1.0.0] — 2026-07-05
 
-Première version complète.
+First complete version.
 
-### Sécurité
-- Surveillance thermique découplée (boucle rapide) : **désalimentation ordonnée
-  non interruptible** au seuil critique, **coupure dure** de dernier recours
-  (`critique + marge`, ou budget de temps dépassé), **verrous par périphérique**
-  sérialisant les accès instrument, état **« trip »** verrouillé et **réarmement**
-  volontaire.
-- Détection de capteur débranché (tension collée à un rail → DÉFAUT), défauts
-  matériels HMP (OVP / fusible / surchauffe), pertes de communication.
+### Security
+- Decoupled thermal monitoring (fast loop): **non-interruptible orderly power-down** at
+  the critical threshold, last-resort **hard cut-off** (`critical + margin`, or time
+  budget exceeded), **per-device locks** serializing instrument accesses, locked
+  **"trip"** state and deliberate **rearm**.
+- Disconnected-sensor detection (voltage stuck to a rail → FAULT), HMP hardware faults
+  (OVP / fuse / overtemperature), communication losses.
 
-### IHM Qt
-- Barre de sécurité permanente (arrêt d'urgence, séquentiel d'arrêt, réarmer,
-  tout OFF), **badge de mode** SIMULATION / MATÉRIEL RÉEL, thèmes clair/sombre,
-  saisies **bornées** par la configuration, **workers matériel en tâche de fond**
-  (pas de gel de l'IHM), éditeur de séquence avec vérification et auto-complétion,
-  onglet graphe (températures / courants / tensions).
+### Qt GUI
+- Permanent safety bar (emergency stop, shutdown sequence, rearm, all OFF), **mode
+  badge** SIMULATION / REAL HARDWARE, light/dark themes, inputs **bounded** by the
+  configuration, **background hardware workers** (no GUI freeze), sequence editor with
+  check and auto-completion, chart tab (temperatures / currents / voltages).
 
-### Traçabilité
-- **Dossiers d'essai autonomes** (`logs/essais/…` : `mesures.csv`, copie de
-  configuration, séquence, journal, métadonnées + issue de l'essai) et **rapport
-  d'essai HTML/PDF régénérable** depuis le seul dossier.
+### Traceability
+- **Self-contained test folders** (`logs/essais/…`: `mesures.csv`, configuration copy,
+  sequence, log, metadata + test outcome) and a **regenerable HTML/PDF test report**
+  from the folder alone.

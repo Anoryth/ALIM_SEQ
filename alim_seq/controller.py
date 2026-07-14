@@ -1,29 +1,30 @@
-"""Contrôleur : orchestration matériel, boucle de mesure et sécurité.
+"""Controller: hardware orchestration, measurement loop and safety.
 
-Le contrôleur est le point d'entrée unique de toute la logique métier. Il :
+The controller is the single entry point for all the business logic. It:
 
-- construit les **instruments** (réels ou simulés) déclarés par la config, chacun
-  exposant ses **capacités** (source de tension, mesure V/I, mesure température… —
-  cf. ``alim_seq/instrument.py``) ; il les pilote *par capacité*, jamais par type ;
-- sérialise les accès matériels par **un verrou par instrument** (``_instr_locks[nom]``,
-  alims comme module de température). Ainsi un timeout VISA sur un instrument ne bloque
-  ni la boucle température ni la coupure des autres. **Ordre d'acquisition invariant**
-  (ne jamais l'inverser) :
+- builds the **instruments** (real or simulated) declared by the config, each
+  exposing its **capabilities** (voltage source, V/I measurement, temperature
+  measurement… — see ``alim_seq/instrument.py``); it drives them *by capability*,
+  never by type;
+- serializes hardware accesses with **one lock per instrument** (``_instr_locks[name]``,
+  supplies as well as the temperature module). This way a VISA timeout on one
+  instrument blocks neither the temperature loop nor the cut-off of the others.
+  **Invariant acquisition order** (never invert it):
 
-      verrou(s) instrument (ordre alphabétique du nom)  ->  _state_lock
+      instrument lock(s) (alphabetical order of the name)  ->  _state_lock
 
-  La boucle de sécurité ne prend QUE le verrou de l'instrument de température (jamais
-  un verrou de source) : une source figée ne peut pas retarder une coupure. Pour un
-  groupe série, on verrouille TOUTES les alims de ses membres, triées par nom, avant
-  toute action (context manager ``_lock_for``).
-- fait tourner une **boucle de mesure** en tâche de fond qui lit tensions,
-  courants et températures, puis évalue la sécurité ;
-- au seuil **critique**, déclenche une **désalimentation ordonnée** (extinction
-  douce des voies, plutôt qu'une coupure brutale) ; une coupure dure n'intervient
-  qu'en dernier recours au-delà de critique + ``hard_margin_c`` ;
-- enregistre les mesures dans un **fichier CSV** au cours du temps ;
-- expose un *snapshot* thread-safe de l'état pour l'IHM ;
-- fournit la primitive d'**asservissement** (servo) réutilisée par le séquenceur.
+  The safety loop takes ONLY the temperature instrument's lock (never a source
+  lock): a frozen source cannot delay a cut-off. For a series group, ALL the
+  supplies of its members are locked, sorted by name, before any action (the
+  ``_lock_for`` context manager).
+- runs a **measurement loop** in the background that reads voltages, currents and
+  temperatures, then evaluates safety;
+- at the **critical** threshold, triggers an **orderly power-down** (soft
+  switch-off of the channels, rather than an abrupt cut-off); a hard cut-off only
+  happens as a last resort beyond critical + ``hard_margin_c``;
+- records the measurements to a **CSV file** over time;
+- exposes a thread-safe *snapshot* of the state for the GUI;
+- provides the **servo control** primitive reused by the sequencer.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ from pathlib import Path
 from typing import Callable, Deque, Dict, List, Optional, Tuple
 
 from .config import AppConfig
+from .i18n import _
 from .controller_recording import RecordingMixin
 from .controller_servo import ServoMixin
 from .controller_simtune import SimTuneMixin
@@ -45,40 +47,40 @@ from .essai import DossierEssai, ISSUE_ARRET_UTILISATEUR, ISSUE_DECLENCHEMENT
 from .instrument import Instrument, create_instrument, driver_role
 from .sequencer import Action, SequenceRunner, load_shutdown_actions
 
-# Niveaux de sécurité
+# Safety levels
 OK = "OK"
 WARNING = "WARNING"
 CRITICAL = "CRITICAL"
-NA = "NA"        # capteur « en attente » : non valide (voie requise pas encore ON)
-FAULT = "FAULT"  # capteur en DÉFAUT (hors plage / débranché) ou perte de comm
+NA = "NA"        # sensor "pending": not valid (required channel not yet ON)
+FAULT = "FAULT"  # sensor in FAULT (out of range / disconnected) or comm loss
 
 
 @dataclass
 class ChannelView:
-    """État d'une voie (ou d'un groupe) vu par l'IHM et le séquenceur.
+    """State of a channel (or a group) as seen by the GUI and the sequencer.
 
-    Réunit les **consignes** (``set_voltage`` SIGNÉE, ``set_current``, ``output``) et
-    les dernières **mesures** (``meas_voltage`` SIGNÉE, ``meas_current``, ``mode``
-    CV/CC, ``faults`` matériels HMP). Les tensions sont signées côté logiciel : une
-    rail négative porte une consigne/mesure négative, la magnitude seule est
-    programmée sur l'alimentation (voir :meth:`Controller.set_voltage`)."""
+    Combines the **setpoints** (SIGNED ``set_voltage``, ``set_current``, ``output``)
+    and the latest **measurements** (SIGNED ``meas_voltage``, ``meas_current``,
+    CV/CC ``mode``, HMP hardware ``faults``). Voltages are signed on the software
+    side: a negative rail carries a negative setpoint/measurement, only the
+    magnitude is programmed on the supply (see :meth:`Controller.set_voltage`)."""
     label: str
     set_voltage: float = 0.0
     set_current: float = 0.1
     output: bool = False
     meas_voltage: float = 0.0
     meas_current: float = 0.0
-    mode: str = ""  # "CV", "CC" ou "" (voie OFF / inconnu)
-    faults: tuple = ()  # défauts matériels HMP : 'OVP', 'FUSE', 'OTP'
+    mode: str = ""  # "CV", "CC" or "" (channel OFF / unknown)
+    faults: tuple = ()  # HMP hardware faults: 'OVP', 'FUSE', 'OTP'
 
 
 @dataclass
 class Snapshot:
-    """Instantané cohérent et thread-safe de tout l'état, produit par
-    :meth:`Controller.snapshot`. L'IHM le lit à sa cadence d'affichage sans jamais
-    toucher au matériel : voies, températures et statut par capteur, état de
-    sécurité global, connexion/communication, défaut matériel et cadences réelles
-    des deux boucles."""
+    """Consistent, thread-safe snapshot of the whole state, produced by
+    :meth:`Controller.snapshot`. The GUI reads it at its display rate without ever
+    touching the hardware: channels, temperatures and per-sensor status, global
+    safety state, connection/communication, hardware fault and the two loops'
+    actual rates."""
     channels: Dict[str, ChannelView]
     temperatures: Dict[str, float]
     temp_status: Dict[str, str]
@@ -87,45 +89,44 @@ class Snapshot:
     tripped: bool
     connected: bool = True
     comm_lost: bool = False
-    hw_fault: str = ""  # défaut matériel HMP (OVP/fusible/surchauffe), vide si aucun
+    hw_fault: str = ""  # HMP hardware fault (OVP/fuse/overtemperature), empty if none
     meas_period: float = 0.0
     temp_period: float = 0.0
-    relays: Dict[str, bool] = field(default_factory=dict)  # sorties de relais (label->état)
-    # Voies dont l'instrument source n'a pas pu être lu au dernier cycle (liaison
-    # figée) : leurs V/I affichés sont PÉRIMÉS -> l'IHM les grise (« ⏱ figé »).
+    relays: Dict[str, bool] = field(default_factory=dict)  # relay outputs (label->state)
+    # Channels whose source instrument could not be read on the last cycle (frozen
+    # link): their displayed V/I are STALE -> the GUI greys them out ("⏱ frozen").
     stale_labels: set = field(default_factory=set)
     timestamp: float = field(default_factory=time.monotonic)
 
 
 class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
-    """Orchestrateur central : matériel, boucles de mesure/sécurité, séquenceur.
+    """Central orchestrator: hardware, measurement/safety loops, sequencer.
 
-    La périphérie cohésive est portée par des mixins (pur déplacement de code, même
-    état ``self``) : :class:`~alim_seq.controller_recording.RecordingMixin`
-    (enregistrement CSV / dossier d'essai),
-    :class:`~alim_seq.controller_servo.ServoMixin` (asservissement) et
-    :class:`~alim_seq.controller_simtune.SimTuneMixin` (couplages simulés + réglage à
-    chaud). Le cœur sûreté (boucles, verrous, cycle de vie, arrêts, escalade) reste
-    ici, cohésif et auditable.
+    The cohesive periphery is carried by mixins (pure code move, same ``self``
+    state): :class:`~alim_seq.controller_recording.RecordingMixin` (CSV recording /
+    test folder), :class:`~alim_seq.controller_servo.ServoMixin` (servo control) and
+    :class:`~alim_seq.controller_simtune.SimTuneMixin` (simulated couplings + live
+    tuning). The safety core (loops, locks, lifecycle, shutdowns, escalation) stays
+    here, cohesive and auditable.
 
-    Construit à partir d'une :class:`~alim_seq.config.AppConfig`. Cycle de vie type :
-    ``Controller(cfg)`` → :meth:`connect` (démarre les boucles) → pilotage via
-    :meth:`set_voltage` / :meth:`set_output` / :meth:`servo` ou une séquence
-    (:meth:`start_user_sequence`) → :meth:`snapshot` pour l'affichage →
-    :meth:`close`. Tout accès matériel est sérialisé par les verrous décrits dans la
-    docstring du module ; aucune méthode ne suppose de tourner dans le thread IHM."""
+    Built from an :class:`~alim_seq.config.AppConfig`. Typical lifecycle:
+    ``Controller(cfg)`` → :meth:`connect` (starts the loops) → control via
+    :meth:`set_voltage` / :meth:`set_output` / :meth:`servo` or a sequence
+    (:meth:`start_user_sequence`) → :meth:`snapshot` for display →
+    :meth:`close`. Every hardware access is serialized by the locks described in the
+    module docstring; no method assumes it runs in the GUI thread."""
 
     def __init__(self, cfg: AppConfig):
         self.cfg = cfg
-        # Un verrou matériel PAR alimentation + un pour le module NI (voir docstring
-        # module pour l'ordre d'acquisition invariant).
-        # Nom interne de l'instrument de température (module NI / mock), garanti
-        # distinct des noms d'alimentations : sert de clé de verrou et de routage.
+        # One hardware lock PER supply + one for the NI module (see the module
+        # docstring for the invariant acquisition order).
+        # Internal name of the temperature instrument (NI module / mock), guaranteed
+        # distinct from the supply names: used as the lock key and for routing.
         self._daq_name = self._pick_daq_name()
-        # Un verrou matériel PAR instrument (sources + température). Voir la docstring
-        # du module pour l'ordre d'acquisition invariant (alphabétique par nom). Les
-        # noms viennent de la section unifiée ``instruments`` (+ l'instrument de
-        # température, synthétisé si la config n'en déclare aucun).
+        # One hardware lock PER instrument (sources + temperature). See the module
+        # docstring for the invariant acquisition order (alphabetical by name). The
+        # names come from the unified ``instruments`` section (+ the temperature
+        # instrument, synthesized if the config declares none).
         self._instr_locks: Dict[str, threading.RLock] = {
             name: threading.RLock()
             for name in set(cfg.instruments) | {self._daq_name}
@@ -133,12 +134,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         self._state_lock = threading.Lock()
         self._logs: Deque[str] = deque(maxlen=1000)
         self._log_lock = threading.Lock()
-        # Abonnés au journal (le dossier d'essai s'y branche le temps d'un essai).
-        # Appelés dans log() hors du verrou du journal, exceptions avalées.
+        # Log subscribers (the test folder attaches to it for the duration of a
+        # test). Called from log() outside the log lock, exceptions swallowed.
         self._log_listeners: List[Callable[[str], None]] = []
         self._log_listeners_lock = threading.Lock()
 
-        # Consignes courantes (ce qui a été demandé), indexées par label.
+        # Current setpoints (what was requested), indexed by label.
         self._set: Dict[str, ChannelView] = {
             label: ChannelView(
                 label=label,
@@ -148,7 +149,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             for label, ch in cfg.channels.items()
         }
 
-        # Dernières mesures connues (mises à jour par la boucle de mesure).
+        # Last known measurements (updated by the measurement loop).
         self._temperatures: Dict[str, float] = {n: float("nan") for n in cfg.temperatures}
         self._temp_voltages: Dict[str, float] = {n: float("nan") for n in cfg.temperatures}
         self._temp_status: Dict[str, str] = {n: OK for n in cfg.temperatures}
@@ -157,79 +158,79 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         self._tripped = False
         self._hard_cut_done = False
 
-        # État de connexion / communication.
+        # Connection / communication state.
         self._connected = False
         self._connect_error = ""
         self._comm_lost = False
         self._psu_fail = 0
         self._daq_fail = 0
 
-        # Défauts matériels HMP (OVP / fusible / surchauffe) remontés du registre.
+        # HMP hardware faults (OVP / fuse / overtemperature) read from the register.
         self._hw_fault_msg = ""
         self._hw_fault_seen: set = set()
 
-        # Cadence réelle mesurée (période effective entre deux cycles, en s).
+        # Actual measured rate (effective period between two cycles, in s).
         self._meas_period = 0.0
         self._temp_period = 0.0
-        # Cycles de mesure V/I consécutifs où l'instrument n'a pas pu être verrouillé
-        # (liaison figée ?) — sert à journaliser l'anomalie sans bloquer la boucle.
+        # Consecutive V/I measurement cycles where the instrument could not be
+        # locked (frozen link?) — used to log the anomaly without blocking the loop.
         self._meas_skip: Dict[str, int] = {}
-        # Derniers états de relais lus avec succès (relay_states est non bloquant :
-        # si un verrou est occupé, on ressert la dernière valeur connue plutôt que rien).
+        # Last successfully read relay states (relay_states is non-blocking: if a
+        # lock is busy, the last known value is reused rather than nothing).
         self._relay_states_cache: Dict[str, bool] = {}
 
         self._build_instruments()
-        # Surveillance température : désactivée si aucun capteur n'est défini
-        # ('temperatures': {}). On n'utilise alors PAS le module NI.
+        # Temperature monitoring: disabled if no sensor is defined
+        # ('temperatures': {}). The NI module is then NOT used.
         self._temp_enabled = bool(self.cfg.temperatures)
 
-        # Deux boucles : températures (sécurité, rapide) et mesures V/I (lente).
+        # Two loops: temperatures (safety, fast) and V/I measurements (slow).
         self._temp_thread: Optional[threading.Thread] = None
         self._meas_thread: Optional[threading.Thread] = None
         self._stop_poll = threading.Event()
-        # Drapeau d'avortement utilisé par le séquenceur (sécurité / arrêt).
+        # Abort flag used by the sequencer (safety / stop).
         self.abort_event = threading.Event()
 
-        # Reconnexion automatique (opt-in) : un chien de garde tente de rouvrir la
-        # liaison après une perte de communication, avec back-off exponentiel.
-        # _reconnect_lock sérialise reconnect() : le chien de garde ET le bouton
-        # « Reconnecter » de l'IHM peuvent le demander au même instant — sans ce
-        # verrou, deux reconstructions d'instruments s'entrelaceraient.
+        # Automatic reconnection (opt-in): a watchdog tries to reopen the link after
+        # a communication loss, with exponential back-off.
+        # _reconnect_lock serializes reconnect(): the watchdog AND the GUI's
+        # "Reconnect" button can request it at the same instant — without this
+        # lock, two instrument rebuilds would interleave.
         self._reconnect_lock = threading.Lock()
         self._auto_reconnect = bool(cfg.safety.get("auto_reconnect", False))
         self._reconnect_max_delay = float(cfg.safety.get("reconnect_max_delay", 30.0))
         self._wd_thread: Optional[threading.Thread] = None
         self._wd_stop = threading.Event()
 
-        # Séquenceur (exécution des fichiers de séquence et de la désalimentation).
+        # Sequencer (runs sequence files and the power-down).
         self.runner = SequenceRunner(self)
-        # Le contrôleur intercepte la fin de séquence pour marquer l'issue de
-        # l'essai, puis relaie à l'IHM via ``on_seq_finish`` (que l'IHM branche).
+        # The controller intercepts the end of a sequence to mark the test outcome,
+        # then relays it to the GUI via ``on_seq_finish`` (which the GUI wires up).
         self.runner.on_finish = self._runner_finished
         self.on_seq_finish: Optional[Callable[[bool, str], None]] = None
-        self._shutdown_inflight = threading.Event()  # évite un double déclenchement
-        # Chemin du fichier de séquentiel d'arrêt (None = extinction auto ordonnée).
+        self._shutdown_inflight = threading.Event()  # avoids a double trigger
+        # Path of the shutdown sequence file (None = automatic orderly power-off).
         self._shutdown_path: Optional[str] = cfg.safety.get("shutdown_sequence")
 
-        # Enregistrement CSV.
+        # CSV recording.
         self._csv_file = None
         self._csv_writer = None
         self._csv_path: Optional[Path] = None
         self._csv_t0: float = 0.0
         self._rec_lock = threading.Lock()
-        # Dossier d'essai en cours (None hors enregistrement, ou enregistrement
-        # « CSV brut » vers un chemin explicite sans dossier).
+        # Current test folder (None outside a recording, or a "raw CSV" recording
+        # to an explicit path with no folder).
         self._essai: Optional[DossierEssai] = None
 
-        # Journal applicatif (fichier) — désactivé tant que enable_file_logging
-        # n'est pas appelé (les tests ne créent donc pas de fichier).
+        # Application log (file) — disabled until enable_file_logging is called
+        # (so the tests do not create a file).
         self._file_logger: Optional[logging.Logger] = None
 
     # ------------------------------------------------------------------ build
     def _pick_daq_name(self) -> str:
-        """Nom de l'instrument de température : le premier instrument déclaré qui n'est
-        ni une source ni un actionneur (relais), sinon un nom synthétique distinct
-        (le contrôleur a toujours un instrument de température, même sans capteur)."""
+        """Name of the temperature instrument: the first declared instrument that is
+        neither a source nor an actuator (relay), otherwise a distinct synthetic name
+        (the controller always has a temperature instrument, even without a sensor)."""
         for name, e in self.cfg.instruments.items():
             if driver_role(str((e or {}).get("driver", "HMP4040"))) not in ("source", "actuator"):
                 return name
@@ -239,20 +240,20 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return name
 
     def _build_instruments(self) -> None:
-        """Construit tous les instruments depuis la section unifiée ``instruments``, et
-        le routage label→(instrument, canal). Chaque entrée est classée **par capacité**
-        via son ``driver`` (source de tension vs température) et fabriquée par le
-        **registre unifié** ``create_instrument``.
+        """Builds all the instruments from the unified ``instruments`` section, and
+        the label→(instrument, channel) routing. Each entry is classified **by
+        capability** via its ``driver`` (voltage source vs temperature) and built by
+        the **unified registry** ``create_instrument``.
 
-        ``self._instruments`` mappe nom→instrument, ``self._source_names`` liste les
-        sources, et ``self._daq`` pointe l'instrument *MesureTemperature*. En
-        simulation, applique les charges résistives ``simulation.loads`` à chaque voie."""
+        ``self._instruments`` maps name→instrument, ``self._source_names`` lists the
+        sources, and ``self._daq`` points to the *MesureTemperature* instrument. In
+        simulation, applies the ``simulation.loads`` resistive loads to each channel."""
         self._routing: Dict[str, Tuple[str, int]] = {
             label: (ch.supply, ch.channel) for label, ch in self.cfg.channels.items()
         }
 
-        # Charges simulées par voie (ohms), depuis simulation.loads (label -> ohms).
-        # Convertis vers {nom_alim: {canal: ohms}} pour chaque mock.
+        # Simulated loads per channel (ohms), from simulation.loads (label -> ohms).
+        # Converted to {supply_name: {channel: ohms}} for each mock.
         loads_cfg = self.cfg.simulation.get("loads", {}) if self.cfg.simulate else {}
         per_supply_loads: Dict[str, Dict[int, float]] = {}
         for label, ohms in loads_cfg.items():
@@ -260,7 +261,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 sname, ch = self._routing[label]
                 per_supply_loads.setdefault(sname, {})[ch] = float(ohms)
 
-        # Routage des sorties de relais : label -> (instrument, état de sécurité).
+        # Relay output routing: label -> (instrument, safe state).
         relay_map = self.cfg.relay_map
         outs_by_instr: Dict[str, List[str]] = {}
         for lbl, meta in relay_map.items():
@@ -292,20 +293,20 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 self._relay_names.append(name)
                 for lbl in outs_by_instr.get(name, []):
                     self._relay_routing[lbl] = (name, bool(relay_map[lbl].get("safe_state", False)))
-            else:  # capacité MesureTemperature (un seul instrument, cf. validation)
+            else:  # MesureTemperature capability (single instrument, see validation)
                 instruments[name] = self._make_daq_instrument(name, entry or {})
-        # Filet : si aucun instrument de température n'est déclaré, on en synthétise un
-        # (le contrôleur en a toujours un, même sans capteur configuré).
+        # Safety net: if no temperature instrument is declared, synthesize one (the
+        # controller always has one, even without a configured sensor).
         if self._daq_name not in instruments:
             instruments[self._daq_name] = self._make_daq_instrument(self._daq_name, {})
         self._instruments = instruments
         self._daq = instruments[self._daq_name]
 
     def _make_daq_instrument(self, name: str, entry: Dict[str, object]) -> Instrument:
-        """Instrument de température : ``MockDAQ`` (modèle thermique piloté par la
-        puissance dissipée) en simulation, module NI réel sinon — via ``create_instrument``.
-        Les capteurs viennent de ``temperatures`` ; ``entry`` porte les paramètres du
-        driver (ex. ``device`` en réel)."""
+        """Temperature instrument: ``MockDAQ`` (thermal model driven by the
+        dissipated power) in simulation, real NI module otherwise — via
+        ``create_instrument``. Sensors come from ``temperatures``; ``entry`` carries
+        the driver parameters (e.g. ``device`` on real hardware)."""
         if self.cfg.simulate:
             sim = self.cfg.simulation
             return create_instrument(
@@ -324,22 +325,22 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         )
 
     def _sources(self):
-        """Itère ``(nom, instrument)`` des sources de tension, dans l'ordre des noms."""
+        """Iterates ``(name, instrument)`` of the voltage sources, in name order."""
         for name in self._source_names:
             yield name, self._instruments[name]
 
     def _route(self, label: str) -> Tuple[Instrument, int]:
-        """Instrument (source) et canal physique d'une voie logique."""
+        """Instrument (source) and physical channel of a logical channel."""
         name, ch = self._routing[label]
         return self._instruments[name], ch
 
     def _total_output_power(self) -> float:
-        """Puissance totale délivrée (utilisée par le modèle thermique simulé).
+        """Total delivered power (used by the simulated thermal model).
 
-        Volontairement SANS verrou : ``output_power`` ne lit qu'un état mémoire du
-        mock (aucune I/O VISA) et cette fonction est appelée par le fournisseur de
-        puissance du MockDAQ *sous* le verrou de l'instrument température. Prendre un
-        verrou de source ici inverserait l'ordre invariant et pourrait deadlocker.
+        Deliberately WITHOUT a lock: ``output_power`` only reads an in-memory mock
+        state (no VISA I/O) and this function is called by MockDAQ's power provider
+        *under* the temperature instrument's lock. Taking a source lock here would
+        invert the invariant order and could deadlock.
         """
         total = 0.0
         for _name, psu in self._sources():
@@ -348,10 +349,10 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                     total += psu.output_power(ch)  # type: ignore[attr-defined]
         return total
 
-    # --------------------------------------------------------- verrous matériels
+    # --------------------------------------------------------- hardware locks
     def _supply_names_for(self, label: str) -> List[str]:
-        """Alims concernées par un label (voie ou groupe), triées par nom (ordre
-        d'acquisition déterministe -> pas de deadlock)."""
+        """Supplies concerned by a label (channel or group), sorted by name
+        (deterministic acquisition order -> no deadlock)."""
         if label in self.cfg.groups:
             names = {self._routing[m][0] for m in self.cfg.groups[label].members
                      if m in self._routing}
@@ -363,7 +364,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
 
     @contextmanager
     def _lock_for(self, label: str):
-        """Verrouille toutes les alims d'un label (voie/groupe), dans l'ordre trié."""
+        """Locks all the supplies of a label (channel/group), in sorted order."""
         acquired = []
         try:
             for name in self._supply_names_for(label):
@@ -377,9 +378,9 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
 
     @contextmanager
     def _all_instr_locked(self):
-        """Verrouille TOUS les instruments (ordre trié par nom). Réservé aux opérations
-        globales exécutées polling ARRÊTÉ (connect/reconnect/close) : deadlock-free par
-        l'ordre, et sans contention car aucune boucle ne tourne à ces moments-là."""
+        """Locks ALL the instruments (order sorted by name). Reserved for global
+        operations run with polling STOPPED (connect/reconnect/close): deadlock-free
+        by the ordering, and without contention since no loop runs at those times."""
         acquired = []
         try:
             for name in sorted(self._instr_locks):
@@ -393,24 +394,24 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
 
     # ------------------------------------------------------------- lifecycle
     def connect(self) -> bool:
-        """Tente la connexion. Ne lève PAS d'exception : retourne True/False et
-        renseigne ``connect_error`` pour que l'IHM reste vivante en cas d'échec."""
+        """Attempts the connection. Does NOT raise: returns True/False and fills in
+        ``connect_error`` so the GUI stays alive on failure."""
         errors = []
-        # Connexion : polling arrêté (ou pas encore démarré) -> on peut prendre tous
-        # les verrous (ordre trié + daq), deadlock-free.
+        # Connection: polling stopped (or not yet started) -> all locks can be taken
+        # (sorted order + daq), deadlock-free.
         with self._all_instr_locked():
             try:
                 for _name, psu in self._sources():
                     psu.connect()
             except Exception as exc:
-                errors.append(f"Alimentations : {exc}")
+                errors.append(_("Power supplies: {}").format(exc))
             if self._temp_enabled:
                 try:
                     self._daq.connect()
                 except Exception as exc:
-                    errors.append(f"Acquisition NI : {exc}")
+                    errors.append(_("NI acquisition: {}").format(exc))
             if not errors:
-                # Consignes par défaut (magnitude tenant compte de la polarité), OFF.
+                # Default setpoints (magnitude accounting for polarity), OFF.
                 try:
                     for label, view in self._set.items():
                         pol = self.cfg.channels[label].polarity
@@ -419,12 +420,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                         inst.set_current(ch, view.set_current)
                         inst.set_output(ch, False)
                 except Exception as exc:
-                    errors.append(f"Initialisation des voies : {exc}")
+                    errors.append(_("Channel initialization: {}").format(exc))
 
         if errors:
             self._connected = False
             self._connect_error = "\n".join(errors)
-            self.log("Échec de connexion :\n  " + "\n  ".join(errors))
+            self.log(_("Connection failed:") + "\n  " + "\n  ".join(errors))
             return False
 
         self._install_sim_couplings()
@@ -433,7 +434,8 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         self._comm_lost = False
         self._psu_fail = 0
         self._daq_fail = 0
-        self.log("Matériel connecté (%s)." % ("SIMULATION" if self.cfg.simulate else "RÉEL"))
+        self.log(_("Hardware connected ({}).").format(
+            _("SIMULATION") if self.cfg.simulate else _("REAL")))
         self.start_polling()
         self._start_watchdog()
         return True
@@ -447,12 +449,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         self._wd_thread.start()
 
     def _watchdog_loop(self) -> None:
-        """Chien de garde de reconnexion : tente de rouvrir la liaison après une
-        perte de communication, avec back-off exponentiel (hors séquence en cours)."""
+        """Reconnection watchdog: tries to reopen the link after a communication
+        loss, with exponential back-off (outside a running sequence)."""
         delay = 2.0
         while not self._wd_stop.wait(1.0):
             if self._comm_lost and not self.runner.is_running:
-                self.log(f"Auto-reconnexion dans {delay:.0f} s…")
+                self.log(_("Auto-reconnect in {:.0f} s…").format(delay))
                 if self._wd_stop.wait(delay):
                     break
                 if self._comm_lost and self.reconnect():
@@ -461,16 +463,16 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                     delay = min(delay * 2.0, self._reconnect_max_delay)
 
     def reconnect(self) -> bool:
-        """Ferme et rouvre des sessions matérielles neuves (après défaut/débranchement).
+        """Closes and reopens fresh hardware sessions (after a fault/disconnection).
 
-        Sérialisé par ``_reconnect_lock`` : le chien de garde et le bouton
-        « Reconnecter » peuvent appeler en même temps — la seconde demande est
-        refusée (False) plutôt que d'entrelacer deux reconstructions d'instruments."""
+        Serialized by ``_reconnect_lock``: the watchdog and the GUI's "Reconnect"
+        button can call it at the same time — the second request is refused (False)
+        rather than interleaving two instrument rebuilds."""
         if not self._reconnect_lock.acquire(blocking=False):
-            self.log("Reconnexion déjà en cours — demande ignorée.")
+            self.log(_("Reconnection already in progress — request ignored."))
             return False
         try:
-            self.log("Tentative de reconnexion…")
+            self.log(_("Attempting to reconnect…"))
             self.stop_polling()
             with self._all_instr_locked():
                 for name in list(self._source_names) + [self._daq_name]:
@@ -478,7 +480,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                         self._instruments[name].close()
                     except Exception:
                         pass
-            # Sessions VISA/NI neuves (mêmes noms -> les verrous restent valides).
+            # Fresh VISA/NI sessions (same names -> the locks stay valid).
             self._build_instruments()
             return self.connect()
         finally:
@@ -496,18 +498,18 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
     def comm_lost(self) -> bool:
         return self._comm_lost
 
-    # Simulation : couplages grille->drain + réglage à chaud -> SimTuneMixin
+    # Simulation: gate->drain couplings + live tuning -> SimTuneMixin
     # (alim_seq/controller_simtune.py).
 
     def close(self) -> None:
-        """Arrêt propre de l'application : stoppe le chien de garde, interrompt toute
-        séquence (même une désalimentation de sécurité), arrête les boucles et
-        l'enregistrement, coupe toutes les voies et ferme les sessions matérielles.
-        Best-effort : chaque étape est protégée pour que la fermeture aille au bout."""
+        """Clean application shutdown: stops the watchdog, interrupts any sequence
+        (even a safety power-down), stops the loops and the recording, cuts off all
+        channels and closes the hardware sessions. Best-effort: every step is
+        protected so the shutdown runs to completion."""
         self._wd_stop.set()
         if self._wd_thread:
             self._wd_thread.join(timeout=2.0)
-        self.runner.force_stop()   # fermeture appli : interrompt tout, même une désalim
+        self.runner.force_stop()   # app shutdown: interrupts everything, even a power-down
         self.stop_polling()
         self.stop_recording()
         with self._all_instr_locked():
@@ -522,20 +524,20 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 except Exception:
                     pass
         self._connected = False
-        self.log("Matériel déconnecté.")
+        self.log(_("Hardware disconnected."))
 
     # ----------------------------------------------------------------- logs
     def enable_file_logging(self, path: Optional[str] = None,
                             max_bytes: int = 2_000_000, backups: int = 3) -> Path:
-        """Active l'écriture du journal applicatif dans un fichier (rotation).
+        """Enables writing the application log to a file (rotation).
 
-        À appeler une fois au démarrage (main.py). Sans effet si déjà actif.
-        Retourne le chemin du fichier journal.
+        Call once at startup (main.py). No effect if already active.
+        Returns the log file's path.
         """
         from logging.handlers import RotatingFileHandler
 
         if self._file_logger is not None:
-            return Path(self._file_logger.handlers[0].baseFilename)  # déjà actif
+            return Path(self._file_logger.handlers[0].baseFilename)  # already active
 
         if path is None:
             logs_dir = Path("logs")
@@ -551,12 +553,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         logger.addHandler(handler)
         self._file_logger = logger
-        self.log(f"Journal applicatif : {path}")
+        self.log(_("Application log: {}").format(path))
         return Path(path)
 
     def add_log_listener(self, cb: Callable[[str], None]) -> None:
-        """Abonne ``cb`` au journal : il reçoit chaque ligne formatée. Utilisé par
-        le dossier d'essai pour écrire ``journal.log``."""
+        """Subscribes ``cb`` to the log: it receives each formatted line. Used by
+        the test folder to write ``journal.log``."""
         with self._log_listeners_lock:
             if cb not in self._log_listeners:
                 self._log_listeners.append(cb)
@@ -576,8 +578,8 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 self._file_logger.info(message)
             except Exception:
                 pass
-        # Abonnés notifiés hors verrou (un abonné lent/en erreur ne bloque pas le
-        # journal ; ses exceptions sont avalées).
+        # Subscribers notified outside the lock (a slow/failing subscriber does not
+        # block the log; its exceptions are swallowed).
         with self._log_listeners_lock:
             listeners = list(self._log_listeners)
         for cb in listeners:
@@ -592,12 +594,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self._logs.clear()
         return out
 
-    # ---------------------------------------------------------- commandes voie
+    # ---------------------------------------------------------- channel commands
     def _clamp(self, label: str, voltage=None, current=None):
         ch = self.cfg.channels[label]
         if voltage is not None:
             voltage = float(voltage)
-            # Tension SIGNÉE : [0, max] si polarité +, [-max, 0] si polarité -.
+            # SIGNED voltage: [0, max] for + polarity, [-max, 0] for - polarity.
             if ch.polarity >= 0:
                 voltage = max(0.0, min(voltage, ch.max_voltage))
             else:
@@ -607,16 +609,17 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return voltage, current
 
     def set_voltage(self, label: str, voltage: float) -> None:
-        """Règle la tension SIGNÉE d'une voie (ou répartit sur un groupe série).
+        """Sets the SIGNED voltage of a channel (or splits it over a series group).
 
-        La valeur est bornée par le clamp (``[0,max]`` ou ``[-max,0]`` selon la
-        polarité) ; seule la **magnitude** est programmée sur l'alimentation (le
-        HMP ne sort que du positif), le signe restant géré côté logiciel. Prend le
-        verrou de la/des alim(s) concernée(s)."""
+        The value is bounded by the clamp (``[0,max]`` or ``[-max,0]`` depending on
+        the polarity); only the **magnitude** is programmed on the supply (the HMP
+        only outputs positive), the sign staying handled on the software side. Takes
+        the lock of the concerned supply/supplies."""
         if label in self.cfg.groups:
             return self._set_group_voltage(label, voltage)
         voltage, _ = self._clamp(label, voltage=voltage)
-        # On programme la MAGNITUDE sur l'alim (positive), on garde le signe côté soft.
+        # The MAGNITUDE is programmed on the supply (positive), the sign is kept on
+        # the software side.
         magnitude = self.cfg.channels[label].polarity * voltage
         with self._lock_for(label):
             inst, ch = self._route(label)
@@ -625,15 +628,15 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self._set[label].set_voltage = voltage
 
     def set_current(self, label: str, current: float) -> None:
-        """Règle la limite de courant d'une voie (bornée à ``[0, max]``).
+        """Sets a channel's current limit (bounded to ``[0, max]``).
 
-        Pour un groupe série, applique la MÊME limite à chaque membre, bornée par la
-        limite du groupe (un empilement série se refroidit moins bien : sa limite
-        peut être plus basse que celle des voies individuelles)."""
+        For a series group, applies the SAME limit to each member, bounded by the
+        group's limit (a series stack cools less well: its limit can be lower than
+        that of the individual channels)."""
         if label in self.cfg.groups:
-            # Voies en série : même limite de courant sur chaque membre, bornée
-            # par la limite du GROUPE (GroupConfig.max_current) qui peut être plus
-            # basse que celle des membres (empilement série moins bien refroidi).
+            # Series channels: same current limit on each member, bounded by the
+            # GROUP's limit (GroupConfig.max_current) which can be lower than that
+            # of the members (series stack cools less well).
             g = self.cfg.groups[label]
             current = max(0.0, min(float(current), self._group_max_current(g)))
             for m in g.members:
@@ -647,79 +650,80 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self._set[label].set_current = current
 
     def set_output(self, label: str, on: bool) -> None:
-        """Allume/éteint une voie (ou un groupe série).
+        """Switches a channel (or a series group) on/off.
 
-        Un groupe s'allume dans l'ordre de ses membres et s'éteint dans l'ordre
-        inverse. Tout allumage est REFUSÉ tant que la sécurité est armée
-        (``tripped``) : il faut réarmer d'abord."""
+        A group switches on in the order of its members and off in reverse order.
+        Any switch-on is REFUSED while safety is armed (``tripped``): it must be
+        rearmed first."""
         if label in self.cfg.groups:
-            # Allumage dans l'ordre des membres, extinction en ordre inverse.
+            # Switch-on in the order of the members, switch-off in reverse order.
             members = self.cfg.groups[label].members
             for m in (members if on else list(reversed(members))):
                 self.set_output(m, on)
-            self.log(f"Groupe série {label} {'ON' if on else 'OFF'}")
+            self.log(_("Series group {} {}").format(label, 'ON' if on else 'OFF'))
             return
         if on and self._tripped:
-            self.log("Refusé : sécurité active (tripped). Réarmer avant d'allumer.")
+            self.log(_("Refused: safety active (tripped). Rearm before switching on."))
             return
         with self._lock_for(label):
             inst, ch = self._route(label)
             inst.set_output(ch, bool(on))
         with self._state_lock:
             self._set[label].output = bool(on)
-        self.log(f"Voie {label} {'ON' if on else 'OFF'}")
+        self.log(_("Channel {} {}").format(label, 'ON' if on else 'OFF'))
 
     def get_setpoint(self, label: str) -> ChannelView:
-        """Consignes courantes (tension/courant/état) d'une voie ou d'un groupe, sans
-        toucher au matériel. Pour l'état complet mesuré, préférer :meth:`snapshot`."""
+        """Current setpoints (voltage/current/state) of a channel or a group, without
+        touching the hardware. For the full measured state, prefer :meth:`snapshot`."""
         if label in self.cfg.groups:
             return self._group_view(label)
         with self._state_lock:
             v = self._set[label]
             return ChannelView(v.label, v.set_voltage, v.set_current, v.output)
 
-    # ----------------------------------------------------------- relais (actionneurs)
+    # ----------------------------------------------------------- relays (actuators)
     def set_relay(self, label: str, on: bool) -> None:
-        """Ferme (``on=True``) ou ouvre une sortie de relais, sous le verrou de son
-        instrument. Tout **fermeture** (ON) est refusée tant que la sécurité est armée
-        (``tripped``), comme pour l'allumage d'une voie : un relais peut ré-alimenter
-        la carte. La mise à l'état de sécurité (:meth:`_drive_relays_safe`) contourne
-        ce garde-fou puisqu'elle fait partie de l'extinction."""
+        """Closes (``on=True``) or opens a relay output, under its instrument's lock.
+        Any **closing** (ON) is refused while safety is armed (``tripped``), as for
+        switching a channel on: a relay can re-power the board. Driving to the safe
+        state (:meth:`_drive_relays_safe`) bypasses this guard since it is part of
+        the power-down."""
         if label not in self._relay_routing:
-            raise KeyError(f"Sortie de relais inconnue : {label!r}")
+            raise KeyError(_("Unknown relay output: {!r}").format(label))
         if on and self._tripped:
-            self.log("Refusé : sécurité active (tripped). Réarmer avant de fermer un relais.")
+            self.log(_("Refused: safety active (tripped). Rearm before closing a relay."))
             return
         name, _safe = self._relay_routing[label]
         with self._instr_locks[name]:
-            # Re-vérification SOUS le verrou : un trip survenu entre le test ci-dessus
-            # et l'acquisition ne doit pas laisser passer une fermeture.
+            # Re-check UNDER the lock: a trip occurring between the test above and
+            # the acquisition must not let a closing through.
             if on and self._tripped:
-                self.log("Refusé : sécurité active (tripped). Réarmer avant de fermer un relais.")
+                self.log(_("Refused: safety active (tripped). Rearm before closing a relay."))
                 return
             self._instruments[name].set_state(label, bool(on))
-        self.log(f"Relais {label} {'ON (fermé)' if on else 'OFF (ouvert)'}")
+        self.log(_("Relay {} {}").format(
+            label, _("ON (closed)") if on else _("OFF (open)")))
 
     def relay_state(self, label: str) -> Optional[bool]:
-        """État courant d'une sortie de relais (``None`` si inconnu)."""
+        """Current state of a relay output (``None`` if unknown)."""
         if label not in self._relay_routing:
-            raise KeyError(f"Sortie de relais inconnue : {label!r}")
+            raise KeyError(_("Unknown relay output: {!r}").format(label))
         name, _safe = self._relay_routing[label]
         with self._instr_locks[name]:
             return self._instruments[name].get_state(label)
 
     def relay_states(self) -> Dict[str, bool]:
-        """État de toutes les sorties de relais (``{label: bool}``), pour l'IHM.
+        """State of all relay outputs (``{label: bool}``), for the GUI.
 
-        Non bloquant : un instrument au verrou occupé est resservi depuis la
-        **dernière lecture réussie** (cache) plutôt qu'omis — l'IHM n'affiche jamais
-        un OFF fantôme pour un relais réellement fermé."""
+        Non-blocking: an instrument whose lock is busy is served the **last
+        successful reading** (cache) rather than omitted — the GUI never displays a
+        ghost OFF for a relay that is actually closed."""
         out: Dict[str, bool] = dict(self._relay_states_cache)
         for name in self._relay_names:
             lk = self._instr_locks.get(name)
             got = lk.acquire(blocking=False) if lk else False
             if not got:
-                continue   # verrou occupé : on garde la dernière valeur connue
+                continue   # lock busy: keep the last known value
             try:
                 out.update(self._instruments[name].states())
             except Exception:
@@ -730,10 +734,10 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return out
 
     def _drive_relays_safe(self) -> None:
-        """Met chaque sortie de relais à son **état de sécurité** configuré (défaut
-        OFF/ouvert). Utilisée par la désalimentation ordonnée et l'arrêt d'urgence :
-        ouvrir un relais isole la carte. Verrou pris en NON bloquant (la sécurité ne
-        doit jamais être retardée par un instrument figé) ; best-effort."""
+        """Sets each relay output to its configured **safe state** (default
+        OFF/open). Used by the orderly power-down and the emergency stop: opening a
+        relay isolates the board. Lock taken NON-blocking (safety must never be
+        delayed by a frozen instrument); best-effort."""
         for name in sorted(self._relay_names):
             lk = self._instr_locks.get(name)
             got = lk.acquire(blocking=False) if lk else False
@@ -743,38 +747,38 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                     if iname == name:
                         inst.set_state(lbl, safe)
             except Exception as exc:
-                self.log(f"Relais {name} état sûr en erreur : {exc}")
+                self.log(_("Relay {} safe-state error: {}").format(name, exc))
             finally:
                 if got:
                     lk.release()
 
-    # ----------------------------------------------- groupes (voies en série)
+    # ----------------------------------------------- groups (series channels)
     def _group_max_voltage(self, g) -> float:
         if g.max_voltage > 0:
             return g.max_voltage
         return sum(self.cfg.channels[m].max_voltage for m in g.members)
 
     def _group_max_current(self, g) -> float:
-        """Limite de courant du groupe : ``max_current`` explicite (> 0) sinon le
-        plus petit des ``max_current`` des membres (série -> même courant partout)."""
+        """Group current limit: explicit ``max_current`` (> 0) otherwise the
+        smallest of the members' ``max_current`` (series -> same current everywhere)."""
         if g.max_current > 0:
             return g.max_current
         return min(self.cfg.channels[m].max_current for m in g.members)
 
     def _split_voltage(self, g, total: float) -> List[float]:
-        """Répartit la tension totale entre les membres (caps par voie respectés)."""
+        """Splits the total voltage between the members (per-channel caps honored)."""
         members = g.members
         maxes = [self.cfg.channels[m].max_voltage for m in members]
         total = max(0.0, min(total, sum(maxes)))
         alloc = [0.0] * len(members)
         if g.split == "fill":
-            # Remplit chaque voie jusqu'à son max, dans l'ordre.
+            # Fills each channel up to its max, in order.
             remaining = total
             for i, mx in enumerate(maxes):
                 alloc[i] = min(mx, remaining)
                 remaining -= alloc[i]
             return alloc
-        # "equal" : partage équilibré avec débordement (water-filling).
+        # "equal": balanced split with overflow (water-filling).
         remaining = total
         active = list(range(len(members)))
         while remaining > 1e-9 and active:
@@ -797,10 +801,11 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         total = max(0.0, min(float(total), self._group_max_voltage(g)))
         alloc = self._split_voltage(g, total)
         for m, av in zip(g.members, alloc):
-            self.set_voltage(m, av)  # voie physique : clamp + suivi consigne
+            self.set_voltage(m, av)  # physical channel: clamp + setpoint tracking
 
     def _group_view(self, label: str) -> ChannelView:
-        """Vue agrégée d'un groupe série, dérivée de l'état des voies membres."""
+        """Aggregated view of a series group, derived from the state of the member
+        channels."""
         g = self.cfg.groups[label]
         with self._state_lock:
             views = [self._set[m] for m in g.members]
@@ -811,7 +816,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             currents = [v.meas_current for v in views]
             modes = [v.mode for v in views]
         meas_i = sum(currents) / len(currents) if currents else 0.0
-        # Le groupe est en CC si au moins une voie membre l'est.
+        # The group is in CC if at least one member channel is.
         if not output:
             mode = ""
         elif "CC" in modes:
@@ -821,8 +826,8 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return ChannelView(label, set_v, set_i, output, meas_v, meas_i, mode)
 
     def _read_current(self, label: str) -> float:
-        """Courant mesuré d'une voie/groupe (auto-verrouillant : prend le/les
-        verrou(s) PSU du label)."""
+        """Measured current of a channel/group (self-locking: takes the PSU
+        lock(s) of the label)."""
         with self._lock_for(label):
             if label in self.cfg.groups:
                 members = self.cfg.groups[label].members
@@ -835,13 +840,13 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             return inst.measure_current(ch)
 
     def _read_current_median(self, label: str, n: int = 3) -> float:
-        """Médiane de ``n`` lectures de courant espacées de ~10 ms. Le bruit de
-        mesure sur une lecture UNIQUE fait osciller l'asservissement autour de la
-        cible ; la médiane l'atténue sans introduire de retard notable."""
+        """Median of ``n`` current readings spaced ~10 ms apart. Measurement noise
+        on a SINGLE reading makes the servo oscillate around the target; the median
+        dampens it without introducing a noticeable delay."""
         if n <= 1:
             return self._read_current(label)
         vals = [self._read_current(label)]
-        for _ in range(n - 1):
+        for _i in range(n - 1):
             time.sleep(0.01)
             vals.append(self._read_current(label))
         vals.sort()
@@ -859,29 +864,29 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return self.cfg.channels[label].polarity
 
     def voltage_bounds(self, label: str) -> Tuple[float, float]:
-        """Bornes de tension SIGNÉE d'une voie/groupe pour l'IHM : ``[0, +max]`` si
-        polarité positive, ``[-max, 0]`` si négative. Le clamp du contrôleur reste
-        l'autorité ; ces bornes ne sont qu'une aide de saisie."""
+        """SIGNED voltage bounds of a channel/group for the GUI: ``[0, +max]`` for
+        positive polarity, ``[-max, 0]`` for negative. The controller's clamp stays
+        authoritative; these bounds are only an input aid."""
         mx = self._max_voltage(label)
         return (0.0, mx) if self._polarity(label) >= 0 else (-mx, 0.0)
 
     def current_bounds(self, label: str) -> Tuple[float, float]:
-        """Bornes de limite de courant d'une voie/groupe pour l'IHM : ``[0, max]``
-        (groupe : ``max_current`` du groupe sinon le plus petit des membres)."""
+        """Current-limit bounds of a channel/group for the GUI: ``[0, max]``
+        (group: the group's ``max_current`` otherwise the smallest of the members)."""
         if label in self.cfg.groups:
             return 0.0, self._group_max_current(self.cfg.groups[label])
         return 0.0, self.cfg.channels[label].max_current
 
     def eval_expression(self, expr: str) -> float:
-        """Évalue une expression de consigne (ex. ``(VD/2)+VG1``) sur l'état
-        courant. Un nom de voie nu vaut sa consigne de tension."""
+        """Evaluates a setpoint expression (e.g. ``(VD/2)+VG1``) against the current
+        state. A bare channel name evaluates to its voltage setpoint."""
         from .expressions import evaluate
 
         snap = self.snapshot()
 
         def resolver(kind: str, label: str) -> float:
             if label not in snap.channels:
-                raise KeyError(f"voie inconnue dans l'expression : {label!r}")
+                raise KeyError(_("unknown channel in expression: {!r}").format(label))
             cv = snap.channels[label]
             if kind == "V":
                 return cv.set_voltage
@@ -891,50 +896,50 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 return cv.set_current
             if kind == "Imeas":
                 return cv.meas_current
-            raise ValueError(f"grandeur inconnue : {kind}")
+            raise ValueError(_("unknown quantity: {}").format(kind))
 
         return evaluate(expr, resolver)
 
-    # ------------------------------------------------- séquence (orchestration)
+    # ------------------------------------------------- sequence (orchestration)
     @property
     def is_sequence_running(self) -> bool:
         return self.runner.is_running
 
     def start_user_sequence(self, actions: List[Action], text: str = "") -> None:
-        """Lance une séquence utilisateur (refusée si sécurité armée).
+        """Starts a user sequence (refused if safety is armed).
 
-        ``text`` est le texte exact de la séquence : s'il est fourni et qu'un
-        enregistrement est en cours, il est archivé dans ``sequence.seq``."""
+        ``text`` is the exact sequence text: if provided and a recording is in
+        progress, it is archived in ``sequence.seq``."""
         if not self._connected or self._comm_lost:
-            self.log("Refusé : matériel non connecté. Vérifier la liaison avant de "
-                     "lancer une séquence.")
+            self.log(_("Refused: hardware not connected. Check the link before "
+                       "starting a sequence."))
             return
         if self._tripped:
-            self.log("Refusé : sécurité active. Réarmer avant de lancer une séquence.")
+            self.log(_("Refused: safety active. Rearm before starting a sequence."))
             return
         if text and self._essai is not None:
             self._essai.write_sequence(text)
         self.runner.start(actions)
 
     def stop_sequence(self) -> None:
-        """Interrompt la séquence utilisateur en cours (sans couper les voies).
-        Sans effet — et journalisé — pendant une désalimentation de sécurité."""
+        """Interrupts the running user sequence (without cutting off the channels).
+        No effect — and logged — during a safety power-down."""
         if self._essai is not None:
             self._essai.set_issue(ISSUE_ARRET_UTILISATEUR)
         if not self.runner.stop():
-            self.log("Stop refusé : désalimentation de sécurité en cours.")
+            self.log(_("Stop refused: safety power-down in progress."))
 
     def set_shutdown_sequence(self, path: Optional[str], log: bool = True) -> None:
-        """Définit le fichier de séquentiel d'arrêt (None/"" = extinction auto
-        ordonnée des voies). Utilisé par le bouton *Séquentiel d'arrêt* ET par la
-        désalimentation de sécurité."""
+        """Sets the shutdown sequence file (None/"" = automatic orderly channel
+        power-off). Used by the *Shutdown sequence* button AND by the safety
+        power-down."""
         self._shutdown_path = path or None
         if not log:
             return
         if self._shutdown_path:
-            self.log(f"Séquentiel d'arrêt : {self._shutdown_path}")
+            self.log(_("Shutdown sequence: {}").format(self._shutdown_path))
         else:
-            self.log("Séquentiel d'arrêt : extinction auto ordonnée.")
+            self.log(_("Shutdown sequence: automatic orderly power-off."))
 
     @property
     def shutdown_path(self) -> Optional[str]:
@@ -942,15 +947,15 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
 
     @property
     def is_shutting_down(self) -> bool:
-        """Vrai pendant une désalimentation (ordonnée ou de sécurité) en cours."""
+        """True while a power-down (orderly or safety) is in progress."""
         return self._shutdown_inflight.is_set()
 
     def start_shutdown_sequence(self, reason: Optional[str] = None, trip: bool = False) -> None:
-        """Déclenche la **désalimentation ordonnée** (extinction douce des voies).
+        """Triggers the **orderly power-down** (soft switch-off of the channels).
 
-        Utilisée par le bouton *Séquentiel d'arrêt* (``trip=False``) et par la
-        sécurité thermique (``trip=True`` : on arme le verrou pour empêcher tout
-        rallumage, mais on éteint proprement plutôt que d'un coup).
+        Used by the *Shutdown sequence* button (``trip=False``) and by the thermal
+        safety (``trip=True``: the lock is armed to prevent any switch-back-on, but
+        the switch-off is clean rather than abrupt).
         """
         if self._shutdown_inflight.is_set():
             return
@@ -959,36 +964,36 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             with self._state_lock:
                 self._tripped = True
                 self._safety_status = CRITICAL
-                self._safety_message = reason or "Désalimentation de sécurité"
-            self.log(f"!!! {reason} — désalimentation ordonnée en cours.")
-            self._mark_safety_issue("trip", reason or "Désalimentation de sécurité")
+                self._safety_message = reason or _("Safety power-down")
+            self.log(_("!!! {} — orderly power-down in progress.").format(reason))
+            self._mark_safety_issue("trip", reason or _("Safety power-down"))
         else:
-            self.log("Séquentiel d'arrêt déclenché.")
+            self.log(_("Shutdown sequence triggered."))
         threading.Thread(target=self._shutdown_worker, daemon=True).start()
 
     def _shutdown_worker(self) -> None:
-        """Exécute la désalimentation ordonnée. NE laisse JAMAIS la carte alimentée :
-        tout échec (séquence utilisateur bloquée, ``runner.start`` qui lève, timeout de
-        la désalimentation, exception imprévue) bascule en coupure dure via
-        :meth:`emergency_stop` (idempotent, best-effort)."""
+        """Runs the orderly power-down. NEVER leaves the board powered: any failure
+        (stuck user sequence, ``runner.start`` raising, power-down timeout,
+        unexpected exception) falls back to a hard cut-off via :meth:`emergency_stop`
+        (idempotent, best-effort)."""
         try:
-            # 1) Reprend la main sur une éventuelle séquence utilisateur (force_stop :
-            #    on va lancer NOTRE séquence à la place, l'intention est inconditionnelle).
+            # 1) Takes over any running user sequence (force_stop: OUR sequence is
+            #    about to launch instead, the intent is unconditional).
             self.runner.force_stop()
             wait_s = float(self.cfg.safety.get("shutdown_takeover_wait_s", 3.0))
             deadline = time.monotonic() + max(0.0, wait_s)
             while self.runner.is_running and time.monotonic() < deadline:
                 time.sleep(0.05)
             if self.runner.is_running:
-                # La séquence refuse de sortir (thread bloqué dans une query VISA en
-                # timeout ?) : impossible de lancer la désalimentation ordonnée
-                # (runner.start lèverait) -> coupure dure immédiate.
-                self.log("Séquence utilisateur bloquée : bascule en coupure dure.")
+                # The sequence refuses to exit (thread stuck in a timed-out VISA
+                # query?): the orderly power-down cannot be launched (runner.start
+                # would raise) -> immediate hard cut-off.
+                self.log(_("User sequence stuck: switching to hard cut-off."))
                 self.emergency_stop(
-                    "Désalimentation ordonnée impossible (séquence bloquée) — coupure dure")
+                    _("Orderly power-down impossible (sequence stuck) — hard cut-off"))
                 return
 
-            # 2) Charge les actions d'arrêt (repli sur extinction auto si invalide).
+            # 2) Loads the shutdown actions (falls back to auto power-off if invalid).
             try:
                 actions = load_shutdown_actions(
                     self._shutdown_path,
@@ -1000,67 +1005,68 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 )
             except Exception as exc:
                 from .sequencer import build_shutdown_actions
-                self.log(f"Séquentiel d'arrêt invalide ({exc}) — extinction auto.")
+                self.log(_("Invalid shutdown sequence ({}) — automatic power-off.").format(exc))
                 actions = build_shutdown_actions(
                     list(self.cfg.channels), float(self.cfg.safety.get("shutdown_delay", 0.5))
                 )
 
-            # 3) Exécute avec un garde-fou temporel : au-delà du budget, coupure dure.
+            # 3) Runs with a time guard: beyond the budget, hard cut-off.
             from .sequencer import estimate_duration
             budget = float(self.cfg.safety.get(
                 "shutdown_timeout", estimate_duration(actions) + 30.0))
-            self.runner.start(actions, safety_mode=True)  # s'exécute même verrou armé
+            self.runner.start(actions, safety_mode=True)  # runs even with the lock armed
             deadline = time.monotonic() + max(1.0, budget)
             while self.runner.is_running:
                 if time.monotonic() > deadline:
-                    self.log(f"Désalimentation trop longue (> {budget:.0f}s) — coupure dure.")
+                    self.log(_("Power-down too long (> {:.0f}s) — hard cut-off.").format(budget))
                     self.emergency_stop(
-                        "Désalimentation ordonnée en timeout — coupure dure")
+                        _("Orderly power-down timed out — hard cut-off"))
                     break
                 time.sleep(0.05)
         except Exception as exc:
-            # Dernier recours : quoi qu'il arrive, on tente de couper les voies.
-            self.log(f"Échec désalimentation ordonnée : {exc}")
+            # Last resort: whatever happens, we try to cut off the channels.
+            self.log(_("Orderly power-down failed: {}").format(exc))
             try:
                 self.emergency_stop(
-                    f"Désalimentation ordonnée impossible ({exc}) — coupure dure")
+                    _("Orderly power-down impossible ({}) — hard cut-off").format(exc))
             except Exception:
                 pass
         finally:
-            # Quel que soit le dénouement, les relais finissent à l'état de sécurité
-            # (les sources sont coupées à ce stade -> on isole).
+            # Whatever the outcome, the relays end up in the safe state (the sources
+            # are cut off at this point -> we isolate).
             self._drive_relays_safe()
             self._shutdown_inflight.clear()
 
-    # ------------------------------------------------------------- sécurité
+    # ------------------------------------------------------------- safety
     def _mark_safety_issue(self, kind: str, message: str) -> None:
-        """Inscrit un événement de sécurité et l'issue « déclenchement » dans le
-        dossier d'essai en cours (sans effet hors enregistrement)."""
+        """Records a safety event and the "trip" outcome in the current test folder
+        (no effect outside a recording)."""
         essai = self._essai
         if essai is None:
             return
         essai.set_issue(ISSUE_DECLENCHEMENT, cause=message)
         essai.add_safety_event(kind, message)
 
-    def emergency_stop(self, reason: str = "Arrêt d'urgence") -> None:
-        """Coupe IMMÉDIATEMENT toutes les voies et arme le verrou de sécurité.
+    def emergency_stop(self, reason: Optional[str] = None) -> None:
+        """IMMEDIATELY cuts off all channels and arms the safety lock.
 
-        Coupure brutale réservée à l'arrêt d'urgence opérateur et à la coupure
-        dure de dernier recours. Pour un arrêt en douceur, voir
-        :meth:`start_shutdown_sequence`.
+        Abrupt cut-off reserved for the operator emergency stop and the last-resort
+        hard cut-off. For a soft stop, see :meth:`start_shutdown_sequence`.
         """
+        if reason is None:
+            reason = _("Emergency stop")
         self.abort_event.set()
-        self.runner.force_stop()   # interrompt même une désalim de sécurité en cours
-        # Coupure alim par alim, verrou pris en NON bloquant : une alim morte (VISA
-        # figé, verrou tenu par une lecture bloquée) ne doit PAS retarder la coupure
-        # des autres. La sécurité prime : on tente l'extinction même sans le verrou.
+        self.runner.force_stop()   # interrupts even a running safety power-down
+        # Cut off supply by supply, lock taken NON-blocking: a dead supply (frozen
+        # VISA, lock held by a stuck read) must NOT delay the cut-off of the others.
+        # Safety comes first: the switch-off is attempted even without the lock.
         for name in sorted(self._source_names):
             lk = self._instr_locks.get(name)
             got = lk.acquire(blocking=False) if lk else False
             try:
                 self._instruments[name].all_outputs_off()
             except Exception as exc:
-                self.log(f"Coupure {name} en erreur : {exc}")
+                self.log(_("Cut-off {} error: {}").format(name, exc))
             finally:
                 if got:
                     lk.release()
@@ -1071,15 +1077,15 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self._hard_cut_done = True
             self._safety_status = CRITICAL
             self._safety_message = reason
-        # Relais à l'état de sécurité (isolement) APRÈS l'armement du trip : une
-        # fermeture concurrente arrivée entre-temps est ainsi soit refusée (tripped),
-        # soit écrasée ici — jamais un relais laissé fermé pendant un trip.
+        # Relays set to the safe state (isolation) AFTER arming the trip: a
+        # concurrent closing arriving in the meantime is thus either refused
+        # (tripped), or overridden here — never a relay left closed during a trip.
         self._drive_relays_safe()
-        self.log(f"!!! {reason} — toutes les voies coupées.")
+        self.log(_("!!! {} — all channels cut off.").format(reason))
         self._mark_safety_issue("coupure_dure", reason)
 
     def reset_safety(self) -> None:
-        """Réarme après un déclenchement (à n'utiliser qu'une fois le défaut levé)."""
+        """Rearms after a trip (only use once the fault has been cleared)."""
         with self._state_lock:
             self._tripped = False
             self._hard_cut_done = False
@@ -1091,20 +1097,20 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self._safety_status = OK
             self._safety_message = ""
         self.abort_event.clear()
-        self.log("Sécurité réarmée.")
+        self.log(_("Safety rearmed."))
 
     @property
     def tripped(self) -> bool:
         return self._tripped
 
-    # Enregistrement CSV / dossier d'essai : voir RecordingMixin
+    # CSV recording / test folder: see RecordingMixin
     # (alim_seq/controller_recording.py).
 
-    # --------------------------------------- boucles de mesure / sécurité
+    # --------------------------------------- measurement / safety loops
     def start_polling(self) -> None:
-        """Démarre les deux threads de fond : température (sécurité, rapide) et
-        mesures V/I (affichage, plus lent). La boucle température n'est lancée que si
-        des capteurs sont configurés. Idempotent (ne relance pas un thread vivant)."""
+        """Starts the two background threads: temperature (safety, fast) and V/I
+        measurements (display, slower). The temperature loop is only launched if
+        sensors are configured. Idempotent (does not relaunch a live thread)."""
         self._stop_poll.clear()
         if self._temp_enabled and not (self._temp_thread and self._temp_thread.is_alive()):
             self._temp_thread = threading.Thread(target=self._temp_loop, name="temp", daemon=True)
@@ -1114,21 +1120,22 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self._meas_thread.start()
 
     def stop_polling(self) -> None:
-        """Arrête les deux boucles de fond et attend la fin des threads (join borné)."""
+        """Stops the two background loops and waits for the threads to end (bounded
+        join)."""
         self._stop_poll.set()
         for t in (self._temp_thread, self._meas_thread):
-            # ``ident`` est None tant que le thread n'a pas démarré : ne JOINDRE que les
-            # threads réellement lancés (un ``start()`` qui aurait échoué laisserait
-            # sinon un objet non démarré -> join() lèverait « before it is started »).
+            # ``ident`` is None until the thread has started: only JOIN threads that
+            # actually launched (a failed ``start()`` would otherwise leave a
+            # not-started object -> join() would raise "before it is started").
             if t is not None and t.ident is not None:
                 t.join(timeout=2.0)
 
-    # --- Boucle TEMPÉRATURE (sécurité, cadence rapide) ----------------------
+    # --- TEMPERATURE loop (safety, fast rate) --------------------------------
     def _temp_loop(self) -> None:
-        """Boucle de sécurité thermique (thread ``temp``). Lit les températures à
-        ``temp_poll_interval`` (rapide), mesure la cadence réelle, et sur erreur
-        répétée déclenche la gestion de perte de mesure. Indépendante des alims : un
-        VISA figé ne peut pas la ralentir."""
+        """Thermal safety loop (``temp`` thread). Reads temperatures at
+        ``temp_poll_interval`` (fast), measures the actual rate, and on a repeated
+        error triggers the measurement-loss handling. Independent from the supplies:
+        a frozen VISA cannot slow it down."""
         interval = float(self.cfg.safety.get(
             "temp_poll_interval", self.cfg.safety.get("poll_interval", 0.5)))
         last = None
@@ -1142,20 +1149,20 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 self._daq_fail = 0
             except Exception as exc:
                 self._daq_fail += 1
-                self.log(f"Erreur lecture température : {exc}")
+                self.log(_("Temperature read error: {}").format(exc))
                 self._handle_temp_failure()
             self._stop_poll.wait(max(0.0, interval - (time.monotonic() - t0)))
 
     def _temp_cycle(self) -> None:
-        """Un cycle de sécurité : lit les températures, classe chaque capteur, calcule
-        le statut global, puis applique l'escalade de sécurité — (1) coupure DURE si
-        un capteur dépasse critique + ``hard_margin_c``, (2) désalimentation ORDONNÉE
-        au seuil critique, (3) désalimentation sur capteur en défaut si configuré."""
-        # Boucle thermique : ne dépend QUE de l'instrument de température. Aucun verrou
-        # de source tenu ici -> un VISA figé sur une alim ne peut pas retarder la sécurité.
+        """One safety cycle: reads temperatures, classifies each sensor, computes
+        the global status, then applies the safety escalation — (1) HARD cut-off if
+        a sensor exceeds critical + ``hard_margin_c``, (2) ORDERLY power-down at the
+        critical threshold, (3) power-down on a faulty sensor if configured."""
+        # Thermal loop: depends ONLY on the temperature instrument. No source lock
+        # held here -> a frozen VISA on a supply cannot delay safety.
         with self._instr_locks[self._daq_name]:
             temps = self._daq.read_temperatures()
-            volts = self._daq.read_voltages()  # tensions brutes NI (filet de sécurité)
+            volts = self._daq.read_voltages()  # raw NI voltages (safety net)
         ready = {n: self._sensor_ready(s) for n, s in self.cfg.temperatures.items()}
         per_sensor = {
             n: self._classify_sensor(n, temps.get(n, float("nan")), ready[n])
@@ -1171,7 +1178,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 self._safety_status = status
                 self._safety_message = message
 
-        # 1) Coupure DURE de dernier recours (capteurs NA/FAULT exclus).
+        # 1) Last-resort HARD cut-off (NA/FAULT sensors excluded).
         hard_margin = float(self.cfg.safety.get("hard_margin_c", 15.0))
         for name, t in temps.items():
             if per_sensor[name] in (NA, FAULT):
@@ -1179,44 +1186,45 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             if t == t and t >= self.cfg.temperatures[name].critical + hard_margin:
                 if not self._hard_cut_done:
                     self.emergency_stop(
-                        f"Coupure dure : {name} = {t:.1f}°C "
-                        f"(> critique + {hard_margin:.0f}°C)"
+                        _("Hard cut-off: {} = {:.1f}°C "
+                          "(> critical + {:.0f}°C)").format(name, t, hard_margin)
                     )
                 return
 
-        # 2) Seuil critique -> désalimentation ORDONNÉE (douce).
+        # 2) Critical threshold -> ORDERLY (soft) power-down.
         if status == CRITICAL and not self._tripped:
             if self.cfg.safety.get("auto_shutdown_on_critical", True):
                 self.start_shutdown_sequence(
-                    reason=f"Température critique {crit_sensor} = {temps[crit_sensor]:.1f}°C",
+                    reason=_("Critical temperature {} = {:.1f}°C").format(
+                        crit_sensor, temps[crit_sensor]),
                     trip=True,
                 )
             return
 
-        # 3) Capteur en DÉFAUT -> désalimentation seulement si configuré.
+        # 3) Sensor in FAULT -> power-down only if configured.
         if fault_sensor and not self._tripped \
                 and self.cfg.safety.get("shutdown_on_sensor_fault", False):
             self.start_shutdown_sequence(
-                reason=f"Capteur en défaut : {fault_sensor}", trip=True)
+                reason=_("Sensor fault: {}").format(fault_sensor), trip=True)
 
     def _handle_temp_failure(self) -> None:
-        """Après ``comm_fail_limit`` erreurs de lecture température consécutives,
-        déclare la perte de mesure. Comme les alims répondent probablement encore, la
-        désalimentation peut être DOUCE (si des voies sont ON et ``shutdown_on_temp_lost``)."""
+        """After ``comm_fail_limit`` consecutive temperature read errors, declares
+        the measurement lost. Since the supplies probably still respond, the
+        power-down can be SOFT (if channels are ON and ``shutdown_on_temp_lost``)."""
         limit = int(self.cfg.safety.get("comm_fail_limit", 3))
         if self._daq_fail < limit or self._comm_lost:
             return
         any_on = any(self._set[l].output for l in self.cfg.channels)
-        msg = "Perte de la mesure de température (module NI)"
-        # Les alims communiquent sans doute encore -> désalimentation DOUCE possible.
+        msg = _("Temperature measurement lost (NI module)")
+        # The supplies probably still communicate -> a SOFT power-down is possible.
         gentle = any_on and self.cfg.safety.get("shutdown_on_temp_lost", True)
         self._declare_comm_lost(msg, gentle=gentle, shutdown=any_on)
 
-    # --- Boucle MESURES V/I (affichage / logs, cadence plus lente) ----------
+    # --- V/I MEASUREMENT loop (display / logs, slower rate) -----------------
     def _meas_loop(self) -> None:
-        """Boucle de mesure V/I (thread ``meas``). Lit tensions/courants/mode à
-        ``poll_interval`` (plus lent, latence SCPI), alimente l'affichage et le CSV,
-        et sur erreur répétée déclenche la gestion de perte de communication alim."""
+        """V/I measurement loop (``meas`` thread). Reads voltages/currents/mode at
+        ``poll_interval`` (slower, SCPI latency), feeds the display and the CSV, and
+        on a repeated error triggers the supply communication-loss handling."""
         interval = float(self.cfg.safety.get("poll_interval", 0.5))
         last = None
         while not self._stop_poll.is_set():
@@ -1229,16 +1237,16 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 self._psu_fail = 0
             except Exception as exc:
                 self._psu_fail += 1
-                self.log(f"Erreur mesure alimentation : {exc}")
+                self.log(_("Power-supply measurement error: {}").format(exc))
                 self._handle_psu_failure()
             self._stop_poll.wait(max(0.0, interval - (time.monotonic() - t0)))
 
     def _meas_cycle(self) -> None:
-        """Un cycle de mesure : lit V/I/mode/défauts de chaque voie (alim par alim,
-        chacune sous son seul verrou, acquis **avec timeout** — une alim au verrou
-        indisponible est sautée ce cycle, jamais bloquante), met à jour l'état,
-        remonte les défauts matériels HMP et écrit une ligne CSV si un
-        enregistrement est en cours."""
+        """One measurement cycle: reads V/I/mode/faults of each channel (supply by
+        supply, each under its own lock, acquired **with a timeout** — a supply
+        whose lock is unavailable is skipped this cycle, never blocking), updates
+        the state, reports HMP hardware faults and writes a CSV row if a recording
+        is in progress."""
         with self._state_lock:
             sp = {l: (self._set[l].set_voltage, self._set[l].set_current,
                       self._set[l].output, self._set[l].mode)
@@ -1246,11 +1254,11 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         meas: Dict[str, Tuple[float, float]] = {}
         modes: Dict[str, str] = {}
         faults: Dict[str, tuple] = {}
-        # On mesure alim par alim, chacune sous SON verrou. Acquisition AVEC TIMEOUT :
-        # un verrou tenu par un appel VISA suspendu (socket mort, timeout inopérant)
-        # bloquerait sinon la boucle ENTIÈRE en silence — aucune exception, donc pas
-        # de détection de perte de comm. Une alim indisponible est SAUTÉE ce cycle
-        # (dernières valeurs conservées) et journalisée après plusieurs cycles ratés.
+        # Measured supply by supply, each under ITS OWN lock. Acquired WITH A
+        # TIMEOUT: a lock held by a hung VISA call (dead socket, inoperative
+        # timeout) would otherwise silently block the WHOLE loop — no exception,
+        # hence no comm-loss detection. An unavailable supply is SKIPPED this cycle
+        # (last values kept) and logged after several failed cycles.
         by_supply: Dict[str, List[str]] = {}
         for label in self.cfg.channels:
             name = self._routing[label][0]
@@ -1263,8 +1271,8 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 n = self._meas_skip.get(name, 0) + 1
                 self._meas_skip[name] = n
                 if n == 5:
-                    self.log(f"!!! Mesures {name} : instrument indisponible depuis "
-                             f"{n} cycles (liaison VISA figée ?) — valeurs figées.")
+                    self.log(_("!!! Measurements {}: instrument unavailable for {} "
+                               "cycles (VISA link frozen?) — values frozen.").format(name, n))
                 continue
             try:
                 inst = self._instruments[name]
@@ -1272,14 +1280,14 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                     ch = self._routing[label][1]
                     v = self.cfg.channels[label].polarity * inst.measure_voltage(ch)
                     i = inst.measure_current(ch)
-                    st = inst.measure_status(ch)  # 1 requête : mode + défauts
+                    st = inst.measure_status(ch)  # 1 query: mode + faults
                     meas[label] = (v, i)
                     modes[label] = st.get("mode") or self._infer_mode(sp[label], v, i)
                     faults[label] = tuple(st.get("faults") or ())
             finally:
                 lk.release()
             if self._meas_skip.get(name, 0) >= 5:
-                self.log(f"Mesures {name} : instrument de nouveau disponible.")
+                self.log(_("Measurements {}: instrument available again.").format(name))
             self._meas_skip[name] = 0
         with self._state_lock:
             for label, (v, i) in meas.items():
@@ -1287,8 +1295,8 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 self._set[label].meas_current = i
                 self._set[label].mode = modes[label]
                 self._set[label].faults = faults[label]
-            # Voies sautées : on complète avec les DERNIÈRES valeurs connues pour que
-            # le CSV et les défauts restent continus (pas de faux 0 V / 0 A).
+            # Skipped channels: filled in with the LAST known values so the CSV and
+            # the faults stay continuous (no false 0 V / 0 A).
             for label in skipped:
                 meas[label] = (self._set[label].meas_voltage,
                                self._set[label].meas_current)
@@ -1300,41 +1308,42 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         self._record_row(meas, temps, volts, status)
 
     def _handle_hw_faults(self, faults: Dict[str, tuple]) -> None:
-        """Remonte les défauts matériels du HMP (OVP/fusible/surchauffe).
+        """Reports the HMP hardware faults (OVP/fuse/overtemperature).
 
-        Journalise chaque nouveau défaut, met à jour la bannière, et déclenche
-        une désalimentation ordonnée si ``safety.shutdown_on_hw_fault`` est vrai.
+        Logs each new fault, updates the banner, and triggers an orderly power-down
+        if ``safety.shutdown_on_hw_fault`` is true.
         """
         active = {label: f for label, f in faults.items() if f}
         labels = ["{} [{}]".format(label, "/".join(f)) for label, f in active.items()]
         with self._state_lock:
-            self._hw_fault_msg = "Défaut alim : " + ", ".join(labels) if labels else ""
-        # Journalise les nouveaux couples (voie, défaut).
+            self._hw_fault_msg = _("Supply fault: ") + ", ".join(labels) if labels else ""
+        # Logs the new (channel, fault) pairs.
         current = {(label, code) for label, fs in active.items() for code in fs}
         for label, code in current - self._hw_fault_seen:
-            self.log(f"!!! Défaut matériel {code} sur la voie {label}")
+            self.log(_("!!! Hardware fault {} on channel {}").format(code, label))
         self._hw_fault_seen = current
         if active and not self._tripped \
                 and self.cfg.safety.get("shutdown_on_hw_fault", False):
             self.start_shutdown_sequence(
-                reason="Défaut matériel alim : " + ", ".join(labels), trip=True)
+                reason=_("Supply hardware fault: ") + ", ".join(labels), trip=True)
 
     def _handle_psu_failure(self) -> None:
-        """Après ``comm_fail_limit`` erreurs de mesure alim consécutives, déclare la
-        perte de communication. L'alim étant injoignable, une rampe propre est
-        impossible → coupure d'urgence (best effort)."""
+        """After ``comm_fail_limit`` consecutive supply measurement errors, declares
+        the communication lost. Since the supply is unreachable, a clean ramp is
+        impossible → emergency cut-off (best effort)."""
         limit = int(self.cfg.safety.get("comm_fail_limit", 3))
         if self._psu_fail < limit or self._comm_lost:
             return
-        # Alim injoignable : on ne peut pas faire une rampe propre -> coupure
-        # d'urgence (best effort, elle échouera peut-être mais on tente).
+        # Unreachable supply: a clean ramp is not possible -> emergency cut-off
+        # (best effort, it may fail but we try).
         self._declare_comm_lost(
-            "Perte de communication avec une alimentation", gentle=False, shutdown=True)
+            _("Communication lost with a power supply"), gentle=False, shutdown=True)
 
     def _declare_comm_lost(self, msg: str, gentle: bool, shutdown: bool) -> None:
-        """Bascule en état perte de communication (``FAULT``) et, si ``shutdown``,
-        désalimente : en douceur (``gentle=True``, les alims répondent encore) ou par
-        coupure dure (``gentle=False``, alim injoignable — best effort)."""
+        """Switches to the communication-loss state (``FAULT``) and, if
+        ``shutdown``, powers down: softly (``gentle=True``, the supplies still
+        respond) or via a hard cut-off (``gentle=False``, unreachable supply —
+        best effort)."""
         with self._state_lock:
             self._comm_lost = True
             self._safety_status = FAULT
@@ -1350,12 +1359,13 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
 
     @staticmethod
     def _infer_mode(sp: Tuple[float, float, bool, str], v: float, i: float) -> str:
-        """Infère CV/CC à partir des consignes et des mesures (V signée).
+        """Infers CV/CC from the setpoints and the measurements (signed V).
 
-        Le HMP4040 n'exposant pas d'état CC/CV en SCPI, on déduit le mode de deux
-        signaux : courant proche de la limite, et/ou tension mesurée nettement
-        sous la consigne. Une **hystérésis** (seuils 'forts' distincts pour entrer
-        et sortir du CC) évite que l'affichage clignote au point de bascule.
+        Since the HMP4040 does not expose a CC/CV state in SCPI, the mode is
+        deduced from two signals: current close to the limit, and/or measured
+        voltage noticeably below the setpoint. A **hysteresis** (distinct 'strong'
+        thresholds to enter and exit CC) prevents the display from flickering at
+        the switch point.
         """
         vset, iset, out, prev = sp
         if not out:
@@ -1373,10 +1383,11 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return "CC" if cc_strong else "CV"
 
     def _classify_sensor(self, name: str, temp: float, ready: bool) -> str:
-        """Classe un capteur : ``NA`` (voie requise pas encore ON), ``FAULT`` (NaN,
-        hors bande de plausibilité, ou tension de référence du pont hors tolérance),
-        sinon niveau thermique ``OK``/``WARNING``/``CRITICAL``. Un capteur ``NA`` ou
-        ``FAULT`` est exclu du calcul de sécurité (jamais une fausse valeur plausible)."""
+        """Classifies a sensor: ``NA`` (required channel not yet ON), ``FAULT``
+        (NaN, out of the plausibility band, or bridge reference voltage out of
+        tolerance), otherwise a thermal level ``OK``/``WARNING``/``CRITICAL``. A
+        ``NA`` or ``FAULT`` sensor is excluded from the safety calculation (never a
+        falsely plausible value)."""
         if not ready:
             return NA
         s = self.cfg.temperatures[name]
@@ -1385,8 +1396,9 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         if (s.valid_min is not None and temp < s.valid_min) or \
            (s.valid_max is not None and temp > s.valid_max):
             return FAULT
-        # Contrôle optionnel de la tension de référence du pont : si la voie qui
-        # l'alimente s'écarte trop du v_ref attendu, la mesure n'est pas fiable.
+        # Optional check of the bridge's reference voltage: if the channel
+        # supplying it strays too far from the expected v_ref, the measurement is
+        # not trustworthy.
         if s.ref_channel:
             vref = s.expected_vref
             if vref:
@@ -1396,7 +1408,7 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return self._sensor_level(name, temp)
 
     def _measured_voltage(self, label: str) -> float:
-        """Tension MESURÉE (signée) d'une voie ou d'un groupe (somme des membres)."""
+        """MEASURED (signed) voltage of a channel or a group (sum of the members)."""
         with self._state_lock:
             if label in self.cfg.groups:
                 return sum(self._set[m].meas_voltage for m in self.cfg.groups[label].members)
@@ -1418,12 +1430,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
         return bool(v and v.output)
 
     def _sensor_ready(self, sensor) -> bool:
-        """Le capteur est valide si toutes ses voies 'requires' sont ON."""
+        """The sensor is valid if all its 'requires' channels are ON."""
         return all(self._channel_is_on(req) for req in sensor.requires)
 
     def _overall_temp_status(self, temps, per_sensor):
-        """Retourne (status, message, capteur_critique, capteur_defaut).
-        Rang croissant de gravité : OK < WARNING < FAULT < CRITICAL."""
+        """Returns (status, message, critical_sensor, faulty_sensor).
+        Increasing severity rank: OK < WARNING < FAULT < CRITICAL."""
         order = {OK: 0, WARNING: 1, FAULT: 2, CRITICAL: 3}
         worst, message = OK, ""
         crit_sensor = fault_sensor = None
@@ -1437,18 +1449,18 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             if order.get(lvl, 0) > order.get(worst, 0):
                 worst = lvl
                 if lvl == FAULT:
-                    message = f"{name} : capteur en défaut"
+                    message = _("{}: sensor fault").format(name)
                 elif lvl == CRITICAL:
-                    message = f"{name} = {temps[name]:.1f}°C >= critique"
+                    message = _("{} = {:.1f}°C >= critical").format(name, temps[name])
                 elif lvl == WARNING:
-                    message = f"{name} = {temps[name]:.1f}°C >= alerte"
+                    message = _("{} = {:.1f}°C >= warning").format(name, temps[name])
         return worst, message, crit_sensor, fault_sensor
 
     # ------------------------------------------------------------- snapshot
     def snapshot(self) -> Snapshot:
-        """Retourne un :class:`Snapshot` cohérent de tout l'état (voies, groupes,
-        températures, sécurité, connexion). Thread-safe et sans I/O matérielle :
-        c'est l'unique point de lecture pour l'IHM et pour ``eval_expression``."""
+        """Returns a consistent :class:`Snapshot` of the whole state (channels,
+        groups, temperatures, safety, connection). Thread-safe and without hardware
+        I/O: it is the single read point for the GUI and for ``eval_expression``."""
         with self._state_lock:
             channels = {
                 label: ChannelView(
@@ -1457,13 +1469,13 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 )
                 for label, v in self._set.items()
             }
-        # Vues agrégées des groupes série (hors verrou : _group_view le reprend).
+        # Aggregated views of series groups (outside the lock: _group_view retakes it).
         for gname in self.cfg.groups:
             channels[gname] = self._group_view(gname)
-        # États des relais (hors _state_lock : prend les verrous instrument des relais).
+        # Relay states (outside _state_lock: takes the relay instrument locks).
         relays = self.relay_states() if self._relay_names else {}
-        # Voies dont l'instrument source a été sauté au dernier cycle de mesure
-        # (liaison VISA figée) : leurs V/I sont périmés.
+        # Channels whose source instrument was skipped on the last measurement
+        # cycle (frozen VISA link): their V/I are stale.
         stale = {label for label in self.cfg.channels
                  if self._meas_skip.get(self._routing[label][0], 0) > 0}
         with self._state_lock:
@@ -1483,5 +1495,5 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
                 stale_labels=stale,
             )
 
-    # Asservissement (servo / servo_adaptive) : voir ServoMixin
+    # Servo control (servo / servo_adaptive): see ServoMixin
     # (alim_seq/controller_servo.py).

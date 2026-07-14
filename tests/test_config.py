@@ -118,7 +118,7 @@ def test_two_temperature_instruments_rejected(tmp_path):
         "NI2": {"driver": "NI-DAQ"},
     }
     raw["channels"]["A"]["supply"] = "P"
-    with pytest.raises(ValueError, match="température"):
+    with pytest.raises(ValueError, match="temperature instruments"):
         load_config(_write(tmp_path, raw))
 
 
@@ -147,7 +147,7 @@ def test_duplicate_physical_channel_rejected(tmp_path):
     # Deux voies ne peuvent pas pointer le même canal physique (alim+canal).
     raw = json.loads(json.dumps(_BASE))
     raw["channels"]["B"] = {"supply": "PSU1", "channel": 1, "warning": 1}
-    with pytest.raises(ValueError, match="déjà affecté"):
+    with pytest.raises(ValueError, match="already assigned"):
         load_config(_write(tmp_path, raw))
 
 
@@ -156,7 +156,7 @@ def test_unknown_supply_model_rejected(tmp_path):
     # la section unifiée 'instruments', modèle et driver étant synonymes pour une source).
     raw = json.loads(json.dumps(_BASE))
     raw["supplies"]["PSU1"]["model"] = "ACME9000"
-    with pytest.raises(ValueError, match="driver|modèle"):
+    with pytest.raises(ValueError, match="driver|model"):
         load_config(_write(tmp_path, raw))
 
 
@@ -165,7 +165,7 @@ def test_channel_beyond_model_channels_rejected(tmp_path):
     raw = json.loads(json.dumps(_BASE))
     raw["supplies"]["PSU1"]["model"] = "HMP2020"
     raw["channels"]["A"]["channel"] = 3
-    with pytest.raises(ValueError, match="hors plage"):
+    with pytest.raises(ValueError, match="out of range"):
         load_config(_write(tmp_path, raw))
 
 
@@ -205,7 +205,7 @@ def test_sensor_ref_channel_parsed_and_validated(tmp_path):
     raw["temperatures"]["T"]["ref_channel"] = "A"
     raw["temperatures"]["T"]["converter"] = {"type": "identity"}
     raw["temperatures"]["T"].pop("ref_voltage", None)
-    with pytest.raises(ValueError, match="référence attendue"):
+    with pytest.raises(ValueError, match="expected reference voltage"):
         load_config(_write(tmp_path, raw))
     # mais 'ref_voltage' explicite (ex. convertisseur table) -> accepté
     raw["temperatures"]["T"]["converter"] = {"type": "table", "points": [[0, 0], [1, 1]]}
@@ -222,7 +222,7 @@ def test_ntc_without_fault_guard_rejected(tmp_path):
         "converter": {"type": "ntc", "v_ref": 3.3, "r_series": 10000,
                       "r0": 10000, "t0": 25, "beta": 3950, "fault_margin": 0},
     }
-    with pytest.raises(ValueError, match="débranchement"):
+    with pytest.raises(ValueError, match="disconnection guard"):
         load_config(_write(tmp_path, raw))
     # Avec une plage plausible, c'est accepté même si fault_margin=0.
     raw["temperatures"]["T"]["valid_min"] = -40
