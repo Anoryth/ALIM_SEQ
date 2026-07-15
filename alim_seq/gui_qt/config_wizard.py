@@ -51,7 +51,7 @@ class ConfigWizard(QtWidgets.QDialog):
 
     def __init__(self, parent=None, visa_backend: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("Assistant de configuration")
+        self.setWindowTitle(self.tr("Configuration wizard"))
         self.resize(720, 460)
         self.result_config = None
         self._visa_backend = visa_backend
@@ -104,7 +104,7 @@ class ConfigWizard(QtWidgets.QDialog):
         self.btn_generate.setEnabled(False)
         self.btn_generate.clicked.connect(self._generate)
         btns.addWidget(self.btn_generate)
-        cancel = QtWidgets.QPushButton("Annuler")
+        cancel = QtWidgets.QPushButton(self.tr("Cancel"))
         cancel.clicked.connect(self.reject)
         btns.addWidget(cancel)
         v.addLayout(btns)
@@ -112,7 +112,7 @@ class ConfigWizard(QtWidgets.QDialog):
     # ---------------------------------------------------------------- scan VISA
     def _scan(self) -> None:
         self.btn_scan.setEnabled(False)
-        self.scan_status.setText("Scan en cours… (quelques secondes)")
+        self.scan_status.setText(self.tr("Scanning… (a few seconds)"))
         backend = self._visa_backend
         self._task = Task(lambda: scan_instruments(visa_backend=backend), self)
         self._task.done.connect(self._scan_done)
@@ -121,7 +121,7 @@ class ConfigWizard(QtWidgets.QDialog):
 
     def _scan_failed(self, msg: str) -> None:
         self.btn_scan.setEnabled(True)
-        self.scan_status.setText(f"Scan impossible : {msg}")
+        self.scan_status.setText(self.tr("Scan failed: {}").format(msg))
         self.scan_status.setStyleSheet(theme.style("text.error"))
 
     def _scan_done(self, found) -> None:
@@ -142,14 +142,14 @@ class ConfigWizard(QtWidgets.QDialog):
         """Saisir une adresse VISA connue (typiquement un socket LAN, non découvrable
         par le scan) et la tester via ``*IDN?`` avant de l'ajouter."""
         addr, ok = QtWidgets.QInputDialog.getText(
-            self, "Ajouter une adresse manuelle",
-            "Adresse VISA (ex. socket LAN, USB) :",
+            self, self.tr("Add a manual address"),
+            self.tr("VISA address (e.g. LAN socket, USB):"),
             text="TCPIP0::192.168.0.11::5025::SOCKET")
         if not ok or not addr.strip():
             return
         addr = addr.strip()
         self.btn_manual.setEnabled(False)
-        self.scan_status.setText(f"Test de {addr}…")
+        self.scan_status.setText(self.tr("Testing {}…").format(addr))
         self.scan_status.setStyleSheet(theme.style("text.muted"))
         self._task = Task(lambda: probe_instrument(addr, self._visa_backend), self)
         self._task.done.connect(lambda idn: self._manual_ok(addr, idn))
@@ -167,7 +167,7 @@ class ConfigWizard(QtWidgets.QDialog):
         self.btn_manual.setEnabled(True)
         self.scan_status.setText("")
         r = QtWidgets.QMessageBox.question(
-            self, "Ajouter une adresse manuelle",
+            self, self.tr("Add a manual address"),
             self.tr("No response from {}:\n{}\n\n"
                     "Add this address anyway (to test later)?").format(addr, msg),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)

@@ -581,7 +581,15 @@ class ConfigMixin:
         self._refresh_channel_supplies()
 
     def _cfg_reload_file(self) -> None:
-        raw = json.loads(Path(self._cfg_path).read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(Path(self._cfg_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            # Fichier supprimé ou corrompu depuis le chargement : ne pas planter,
+            # laisser les formulaires en l'état et signaler l'échec.
+            self.cfg_status.setText(
+                self.tr("Cannot reload {}: {}").format(Path(self._cfg_path).name, exc))
+            self.cfg_status.setStyleSheet(theme.style("text.error"))
+            return
         self._fill_forms_from_raw(raw)
         self.cfg_json.setPlainText(json.dumps(raw, indent=2, ensure_ascii=False))
         self.cfg_status.setText(self.tr("Configuration loaded from {}.").format(Path(self._cfg_path).name))
@@ -646,13 +654,13 @@ class ConfigMixin:
         try:
             raw = self._collect_config()
         except Exception as exc:
-            return None, f"✗ Formulaire/JSON invalide : {exc}"
+            return None, self.tr("✗ Invalid form/JSON: {}").format(exc)
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
                                          encoding="utf-8") as f:
             json.dump(raw, f); tmp = f.name
         try:
             load_config(tmp)
-            return raw, "✓ Configuration valide."
+            return raw, self.tr("✓ Valid configuration.")
         except Exception as exc:
             return None, f"✗ {exc}"
         finally:
@@ -714,7 +722,11 @@ class ConfigMixin:
         self.ctrl.enable_file_logging()
         self.runner = self.ctrl.runner
         self.runner.on_line = self._on_seq_line
-        self.runner.on_finish = self._on_seq_finish
+        # La fin de séquence passe par le contrôleur (qui marque l'issue de
+        # l'essai via son propre runner.on_finish) avant de nous être relayée —
+        # comme au démarrage. Poser runner.on_finish ici écraserait ce relais et
+        # laisserait l'issue de l'essai non marquée (« Terminé » à tort).
+        self.ctrl.on_seq_finish = self._on_seq_finish
         self._actions = []
         self._seq_run_line = 0
         # Bascule sur le fichier chargé (modèle document).

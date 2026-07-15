@@ -4,6 +4,47 @@ All notable changes to ALIM_SEQ are recorded here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning [SemVer](https://semver.org/).
 
+## [1.3.3] — 2026-07-15
+
+### Added
+- **Vector figure exports** in each test folder, **one file per quantity**: voltage,
+  current and temperature are each written as PDF and SVG under `<test folder>/
+  figures/` — resolution-independent (infinitely sharp), ready to drop into an annex
+  report (PDF) or edit in a vector tool (SVG).
+
+### Changed
+- **Higher-resolution report charts**: the measurement and trip-zoom charts are now
+  rasterized at 300 dpi (was 200), for crisper curves and text in the PDF and the
+  HTML preview.
+
+### Fixed
+- **Safety: channel switch-on during a trip**: `set_output` now re-checks the safety
+  lock **under the instrument lock** (as `set_relay` already did), closing a narrow
+  race where a switch-ON issued just before a trip could reach the hardware.
+- **Test outcome after reloading a configuration**: applying a config or loading a
+  profile rewired the sequence-end callback in a way that bypassed the controller,
+  leaving the test outcome unmarked — a failed/interrupted sequence was recorded as
+  “Completed”. The GUI now keeps the controller in the loop, as at startup.
+- **Unsaved sequence lost on quit**: choosing “Save” at quit for a never-saved
+  sequence and then cancelling the “Save as…” dialog closed the app anyway. Saving
+  now reports success/failure and the window stays open if nothing was written.
+- **Non-UTF-8 / missing files**: opening a `.seq` saved on Windows (CP1252) raised an
+  unhandled error; sequence files now read with a latin-1 fallback, and a deleted or
+  corrupt config file no longer crashes “Reload the file”.
+- **Untranslated UI in French**: many hard-coded French strings (window title, REAL
+  HARDWARE badge, Chart tab, several dialogs, config wizard) went through no
+  translation catalog; they are now English source strings with French translations.
+  Several `tr()` calls nested inside f-strings — including the Ctrl+M line of the
+  keyboard-shortcuts dialog and the sequence-command reference — escaped extraction
+  and stayed English in the French UI; they are now extracted and translated.
+  Standard Qt buttons (Yes/No/Cancel) also follow the language.
+- **User manual**: the non-navigable cross-language link is stripped from the in-app
+  view (kept in the Markdown for GitHub).
+- **Sequence command reference**: clicking a command no longer opens a blank page
+  (link navigation disabled in this read-only view).
+- **Remaining-time estimate** is no longer shown (and no longer wrong) while a
+  shutdown sequence is running.
+
 ## [1.3.2] — 2026-07-15
 
 ### Fixed

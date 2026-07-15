@@ -12,6 +12,17 @@ from ..sequencer import SequenceError, estimate_duration, parse_sequence
 from . import theme
 
 
+def read_text_tolerant(path) -> str:
+    """Lit un fichier texte en UTF-8, avec repli latin-1 (qui ne peut pas échouer
+    au décodage) pour tolérer les ``.seq`` créés sous Windows en CP1252. Peut
+    lever ``OSError`` si le fichier est absent ou illisible — au décodage, jamais."""
+    data = Path(path).read_bytes()
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("latin-1")
+
+
 class SeqHighlighter(QtGui.QSyntaxHighlighter):
     """Coloration syntaxique des séquences ``.seq`` : commandes, commentaires,
     nombres, clés ``clé=``, opérateurs, et voies/capteurs **connus** (les noms non
@@ -179,8 +190,17 @@ class EditorMixin:
         K = theme.pair("syntax.key")[1]
         G = theme.pair("syntax.label")[1]
         cm = theme.pair("syntax.comment")[1]
+        # Chaînes traduites extraites hors des f-strings : un self.tr(...) imbriqué
+        # dans une f-string échappe à lupdate et ne serait jamais traduit.
+        t_click = self.tr("Click a command to insert it at the cursor.")
+        t_keys = self.tr("SERVO keys: step, min, max, tol, timeout, settle, invert "
+                         "(+ damping for ADAPT)<br>op: &lt; &lt;= &gt; &gt;= == !=<br>"
+                         "# or // : comment")
+        t_channels = self.tr("Channels &amp; groups")
+        t_sensors = self.tr("Sensors")
+        t_relays = self.tr("Relays")
         out = ["<div style='font-family:sans-serif; font-size:12px'>",
-               f"<p style='color:{cm}'>{self.tr('Click a command to insert it at the cursor.')}</p>",
+               f"<p style='color:{cm}'>{t_click}</p>",
                "<table cellspacing='0' cellpadding='2'>"]
         for cmd, args, desc in self._seq_rows():
             out.append(
@@ -190,18 +210,14 @@ class EditorMixin:
                 f"<td style='color:{K}'><code>{args}</code>&nbsp;&nbsp;</td>"
                 f"<td style='color:{cm}'>{desc}</td></tr>")
         out.append("</table>")
-        out.append(
-            f"<p style='color:{cm}'>" + self.tr(
-                "SERVO keys: step, min, max, tol, timeout, settle, invert "
-                "(+ damping for ADAPT)<br>op: &lt; &lt;= &gt; &gt;= == !=<br>"
-                "# or // : comment") + "</p>")
-        out.append(f"<p><b>{self.tr('Channels &amp; groups')}</b><br>"
+        out.append(f"<p style='color:{cm}'>{t_keys}</p>")
+        out.append(f"<p><b>{t_channels}</b><br>"
                    f"<span style='color:{G}'>{', '.join(labels)}</span></p>")
         if sensors:
-            out.append(f"<p><b>{self.tr('Sensors')}</b><br>"
+            out.append(f"<p><b>{t_sensors}</b><br>"
                        f"<span style='color:{G}'>{', '.join(sensors)}</span></p>")
         if relays:
-            out.append(f"<p><b>{self.tr('Relays')}</b><br>"
+            out.append(f"<p><b>{t_relays}</b><br>"
                        f"<span style='color:{G}'>{', '.join(relays)}</span></p>")
         out.append("</div>")
         return "".join(out)
@@ -264,8 +280,11 @@ class EditorMixin:
         last = self._settings.value("last_seq", "")
         default = Path(last) if last and Path(last).exists() else Path("sequences/demo.seq")
         if default.exists():
-            self.seq_editor.setPlainText(default.read_text(encoding="utf-8"))
-            self.seq_edit_path.setText(str(default))
+            try:
+                self.seq_editor.setPlainText(read_text_tolerant(default))
+                self.seq_edit_path.setText(str(default))
+            except OSError:
+                pass   # fichier illisible au démarrage : éditeur vierge, pas de crash
         self.seq_editor.document().setModified(False)
         self._update_editor_selections()
         self._update_title()
@@ -334,34 +353,47 @@ class EditorMixin:
             self, self.tr("Open a sequence"), self._dialog_dir(), self.tr("Sequence (*.seq *.txt);;All (*)"))
         if not path:
             return
-        self.seq_editor.setPlainText(Path(path).read_text(encoding="utf-8"))
+        try:
+            text = read_text_tolerant(path)
+        except OSError as exc:
+            QtWidgets.QMessageBox.critical(self, self.tr("Open a sequence"), str(exc))
+            return
+        self.seq_editor.setPlainText(text)
         self.seq_edit_path.setText(path)
         self.seq_editor.document().setModified(False)
         self._settings.setValue("last_seq", path)
         self._remember_dir(path)
-        self.seq_edit_status.setText(f"Ouvert : {Path(path).name}")
+        self.seq_edit_status.setText(self.tr("Opened: {}").format(Path(path).name))
         self.seq_edit_status.setStyleSheet(theme.style("text.muted"))
         self._update_title()
 
-    def _seq_save(self) -> None:
+    def _seq_save(self) -> bool:
+        """Enregistre la séquence. Retourne True si elle a réellement été écrite,
+        False si l'utilisateur a annulé « Enregistrer sous… » ou en cas d'erreur
+        d'écriture (le closeEvent s'en sert pour ne pas fermer sur perte de données)."""
         p = self.seq_edit_path.text().strip()
         if not p:
             return self._seq_save_as()
-        Path(p).write_text(self.seq_editor.toPlainText(), encoding="utf-8")
+        try:
+            Path(p).write_text(self.seq_editor.toPlainText(), encoding="utf-8")
+        except OSError as exc:
+            QtWidgets.QMessageBox.critical(self, self.tr("Save the sequence"), str(exc))
+            return False
         self.seq_editor.document().setModified(False)
         self._settings.setValue("last_seq", p)
         self.seq_edit_status.setText(self.tr("Saved: {}").format(Path(p).name))
         self.seq_edit_status.setStyleSheet(theme.style("text.ok"))
         self._update_title()
+        return True
 
-    def _seq_save_as(self) -> None:
+    def _seq_save_as(self) -> bool:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, self.tr("Save the sequence"), self._dialog_dir(), self.tr("Sequence (*.seq);;All (*)"))
         if not path:
-            return
+            return False
         self.seq_edit_path.setText(path)
         self._remember_dir(path)
-        self._seq_save()
+        return self._seq_save()
 
     def _seq_parse_editor(self):
         return parse_sequence(self.seq_editor.toPlainText(),

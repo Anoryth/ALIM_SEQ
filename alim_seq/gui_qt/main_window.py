@@ -15,7 +15,7 @@ from ..config import load_config
 from ..controller import CRITICAL, FAULT, NA, OK, WARNING, Controller
 from ..sequencer import Action, SequenceError, estimate_duration, parse_sequence
 from .config_tab import ConfigMixin
-from .editor import EditorMixin
+from .editor import EditorMixin, read_text_tolerant
 from .plot import TempPlotQt
 from .sim_tab import SimMixin
 from . import theme
@@ -125,7 +125,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
     # Callbacks séquenceur (thread runner -> on ne touche QUE des attributs).
     def _on_seq_line(self, ln, raw):
-        self._seq_status = (f"En cours — L{ln}: {raw}", "text.info")
+        self._seq_status = (self.tr("Running — L{}: {}").format(ln, raw), "text.info")
         self._seq_run_line = ln
 
     def _on_seq_finish(self, ok, msg):
@@ -303,7 +303,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                 theme.style("badge.sim", "padding:4px 10px; border-radius:3px;"))
             self.mode_badge.setToolTip(self.tr("No hardware driven — simulated model."))
         else:
-            self.mode_badge.setText("MATÉRIEL RÉEL")
+            self.mode_badge.setText(self.tr("REAL HARDWARE"))
             self.mode_badge.setStyleSheet(
                 theme.style("badge.real", "padding:4px 10px; border-radius:3px;"))
             self.mode_badge.setToolTip(self.tr("Driving REAL hardware — check the config limits."))
@@ -540,12 +540,12 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         if hasattr(self, "sb_cfg"):
             self.sb_cfg.setText(f"cfg : {name}")
         if hasattr(self, "cfg_header_label"):
-            self.cfg_header_label.setText(
-                f"Édition interactive de <b>{name}</b>. Les voies/groupes/capteurs "
-                "renommés ou supprimés sont vérifiés à « Appliquer ».")
+            self.cfg_header_label.setText(self.tr(
+                "Interactive configuration editing. Renamed or deleted "
+                "channels/groups/sensors are checked on “Apply”."))
 
     def _update_title(self) -> None:
-        base = f"ALIM_SEQ — Séquenceur d'alimentation  v{__version__}"
+        base = self.tr("ALIM_SEQ — Power-supply sequencer  v{}").format(__version__)
         name = ""
         if hasattr(self, "seq_edit_path"):
             p = self.seq_edit_path.text().strip()
@@ -568,17 +568,17 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(self, self.tr("Profile"), self.tr("Stop the sequence first."))
             return
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Charger une configuration (profil)", self._dialog_dir(),
-            "Configuration (*.json);;Tous (*)")
+            self, self.tr("Load a configuration (profile)"), self._dialog_dir(),
+            self.tr("Configuration (*.json);;All (*)"))
         if not path:
             return
         try:
             load_config(path)   # valide avant de basculer
         except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Configuration invalide", str(exc))
+            QtWidgets.QMessageBox.critical(self, self.tr("Invalid configuration"), str(exc))
             return
         if QtWidgets.QMessageBox.question(
-                self, "Charger le profil",
+                self, self.tr("Load the profile"),
                 self.tr("Switch to this profile and reload the hardware?\n\n{}").format(path)
         ) != QtWidgets.QMessageBox.Yes:
             return
@@ -589,8 +589,8 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
     def _menu_save_config_as(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Enregistrer la configuration sous…", self._dialog_dir(),
-            "Configuration (*.json)")
+            self, self.tr("Save configuration as…"), self._dialog_dir(),
+            self.tr("Configuration (*.json)"))
         if not path:
             return
         if not path.lower().endswith(".json"):
@@ -631,17 +631,22 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                     version=__version__, mode=mode, cfg=self._cfg_path, log=log_path))
 
     def _show_shortcuts(self) -> None:
+        # Descriptions extraites hors f-string : un self.tr(...) IMBRIQUÉ dans une
+        # f-string n'est pas vu par lupdate (donc jamais traduit).
+        rows = [
+            ("Ctrl+Shift+X", self.tr("Emergency stop")),
+            ("Ctrl+S", self.tr("Save the sequence")),
+            ("Ctrl+O", self.tr("Open a sequence")),
+            ("F5", self.tr("Check the sequence")),
+            ("Ctrl+Enter", self.tr("Load and run the sequence")),
+            ("Ctrl+R", self.tr("Start/stop recording")),
+            ("Ctrl+M", self.tr("Place an operator marker")),
+        ]
+        body = "".join(f"<tr><td><b>{key}</b></td><td>{desc}</td></tr>"
+                       for key, desc in rows)
         QtWidgets.QMessageBox.information(
             self, self.tr("Keyboard shortcuts"),
-            "<table cellpadding='4'>"
-            f"<tr><td><b>Ctrl+Shift+X</b></td><td>{self.tr('Emergency stop')}</td></tr>"
-            f"<tr><td><b>Ctrl+S</b></td><td>{self.tr('Save the sequence')}</td></tr>"
-            f"<tr><td><b>Ctrl+O</b></td><td>{self.tr('Open a sequence')}</td></tr>"
-            f"<tr><td><b>F5</b></td><td>{self.tr('Check the sequence')}</td></tr>"
-            f"<tr><td><b>Ctrl+Enter</b></td><td>{self.tr('Load and run the sequence')}</td></tr>"
-            f"<tr><td><b>Ctrl+R</b></td><td>{self.tr('Start/stop recording')}</td></tr>"
-            f"<tr><td><b>Ctrl+M</b></td><td>{self.tr('Place an operator marker')}</td></tr>"
-            "</table>")
+            f"<table cellpadding='4'>{body}</table>")
 
     def _manual_path(self):
         """Path to the user manual, in the current language when available:
@@ -670,15 +675,22 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         browser = QtWidgets.QTextBrowser()
         browser.setOpenExternalLinks(True)
         if md_path is not None:
+            import re
             text = md_path.read_text(encoding="utf-8")
             # Retire l'en-tête YAML (--- … ---) que le rendu Markdown afficherait brut.
             if text.startswith("---"):
                 end = text.find("\n---", 3)
                 if end != -1:
                     text = text[end + 4:]
+            # Retire le lien inter-langue (« (English: [USER_MANUAL.md](…)) ») :
+            # la cible relative n'est pas navigable dans le QTextBrowser (pas de base
+            # de recherche), un clic ouvrirait une page blanche.
+            text = re.sub(r"^.*\]\((?:USER_MANUAL|MANUEL_UTILISATEUR)\.md\).*$\n?",
+                          "", text, flags=re.M)
             browser.setMarkdown(text)
         else:
-            browser.setHtml(f"<p>{self.tr('Manual not found in this installation.')}</p>")
+            not_found = self.tr("Manual not found in this installation.")
+            browser.setHtml(f"<p>{not_found}</p>")
         lay.addWidget(browser)
         bar = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
         pdf = md_path.with_suffix(".pdf") if md_path is not None else None
@@ -697,6 +709,10 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         dlg.resize(560, 620)
         lay = QtWidgets.QVBoxLayout(dlg)
         browser = QtWidgets.QTextBrowser()
+        # Vue de référence en lecture seule : les liens « ins: » ne servent qu'à
+        # l'insertion depuis l'ÉDITEUR (help_box). Ici on désactive la navigation,
+        # sinon un clic ouvrirait une page blanche (setSource sur une URL factice).
+        browser.setOpenLinks(False)
         browser.setHtml(self._seq_help_html(list(self.ctrl.cfg.all_labels),
                                             list(self.ctrl.cfg.temperatures),
                                             list(self.ctrl.cfg.relay_labels)))
@@ -730,13 +746,13 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
                                channels=list(self.ctrl.cfg.channels))
 
         ctl = QtWidgets.QHBoxLayout()
-        ctl.addWidget(QtWidgets.QLabel("Grandeur :"))
+        ctl.addWidget(QtWidgets.QLabel(self.tr("Quantity:")))
         qty = QtWidgets.QComboBox()
         # « Températures » n'est proposé que si des capteurs sont configurés.
         if self.ctrl.cfg.temperatures:
             qty.addItem(self.tr("Temperatures (°C)"), "temp")
-        qty.addItem("Courants (A)", "current")
-        qty.addItem("Tensions (V)", "voltage")
+        qty.addItem(self.tr("Currents (A)"), "current")
+        qty.addItem(self.tr("Voltages (V)"), "voltage")
         qty.setToolTip(self.tr("Plotted quantity. Hover the chart to read values; "
                                "click a curve name in the legend to hide/show it."))
         qty.currentIndexChanged.connect(lambda i: self.plot.set_mode(qty.itemData(i)))
@@ -745,13 +761,13 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self.plot.set_mode(qty.currentData())
         ctl.addWidget(qty)
         if self.ctrl.cfg.temperatures:
-            ctl.addWidget(QtWidgets.QLabel("(── mesure · – – warning · ··· critical)"))
+            ctl.addWidget(QtWidgets.QLabel(self.tr("(── measured · – – warning · ··· critical)")))
         ctl.addStretch(1)
-        self._plot_pause_btn = QtWidgets.QPushButton("⏸ Pause")
+        self._plot_pause_btn = QtWidgets.QPushButton(self.tr("⏸ Pause"))
         self._plot_pause_btn.setCheckable(True)
         self._plot_pause_btn.toggled.connect(self._toggle_plot_pause)
         ctl.addWidget(self._plot_pause_btn)
-        clear = QtWidgets.QPushButton("🗑 Effacer"); clear.clicked.connect(
+        clear = QtWidgets.QPushButton(self.tr("🗑 Clear")); clear.clicked.connect(
             lambda: self.plot.set_sensors(self.plot.sensors))
         ctl.addWidget(clear)
         export = QtWidgets.QPushButton("📷 PNG"); export.clicked.connect(self._export_plot_png)
@@ -772,11 +788,11 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
     def _toggle_plot_pause(self, on: bool) -> None:
         self._plot_paused = on
-        self._plot_pause_btn.setText("▶ Reprendre" if on else "⏸ Pause")
+        self._plot_pause_btn.setText(self.tr("▶ Resume") if on else self.tr("⏸ Pause"))
 
     def _export_plot_png(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Exporter le graphe", "graphe.png", "Image PNG (*.png)")
+            self, self.tr("Export the chart"), "graphe.png", self.tr("PNG image (*.png)"))
         if not path:
             return
         if not path.lower().endswith(".png"):
@@ -784,7 +800,8 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         if self.plot.grab().save(path):
             self.ctrl.log(self.tr("Chart exported: {}").format(path))
         else:
-            QtWidgets.QMessageBox.warning(self, "Export", "Échec de l'enregistrement du PNG.")
+            QtWidgets.QMessageBox.warning(self, self.tr("Export"),
+                                          self.tr("Failed to save the PNG."))
 
     def _export_plot_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -826,7 +843,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         # la barre de sécurité, au-dessus des onglets.)
 
         # Voies
-        chan_box = QtWidgets.QGroupBox("Voies d'alimentation")
+        chan_box = QtWidgets.QGroupBox(self.tr("Power channels"))
         cg = QtWidgets.QGridLayout(chan_box)
         self._setup_grid(cg, last_col=7)
         for r, label in enumerate(self.ctrl.cfg.channels, start=1):
@@ -857,7 +874,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
 
         # Relais (actionneurs) — affichés seulement si la config en déclare.
         if self.ctrl.cfg.relay_labels:
-            rlbox = QtWidgets.QGroupBox("Relais")
+            rlbox = QtWidgets.QGroupBox(self.tr("Relays"))
             rlg = QtWidgets.QGridLayout(rlbox)
             rlg.setHorizontalSpacing(18)
             for col, h in enumerate(RelayRowQt.headers()):
@@ -977,7 +994,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, self.tr("File not found"), str(path))
             return False
         try:
-            text = path.read_text(encoding="utf-8")
+            text = read_text_tolerant(path)
             self._actions = parse_sequence(text, set(self.ctrl.cfg.all_labels),
                                            set(self.ctrl.cfg.temperatures),
                                            set(self.ctrl.cfg.relay_labels))
@@ -1327,13 +1344,17 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         """Barre de progression k/n + temps restant estimé (en cours), ou durée
         totale estimée (au repos)."""
         total = len(self._actions)
+        # Pendant une séquence d'arrêt (mode sécurité), le runner exécute une AUTRE
+        # liste que self._actions : l'estimation du restant à partir de self._actions
+        # serait fausse. On affiche alors seulement l'avancement k/n, sans estimation.
+        safety = getattr(self.runner, "_safety_mode", False)
         if running:
             k, n = self.runner.progress
             n = n or total
             self.seq_progress.setMaximum(max(1, n))
             self.seq_progress.setValue(min(k, n))
             self.seq_progress.setFormat(f"{min(k, n)}/{n}")
-            remaining = estimate_duration(self._actions[k:]) if self._actions else 0.0
+            remaining = estimate_duration(self._actions[k:]) if (self._actions and not safety) else 0.0
             self.seq_remaining.setText(self.tr("~{:.0f}s remaining").format(remaining) if remaining > 0 else "—")
         else:
             self.seq_progress.setMaximum(max(1, total))
@@ -1447,7 +1468,7 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
         self.seq_status.setStyleSheet(theme.style(self._seq_status[1]))
         running = self.runner.is_running
         if self.plot is not None and running != self._was_running:
-            self.plot.mark("début séq." if running else "fin séq.")
+            self.plot.mark(self.tr("seq. start") if running else self.tr("seq. end"))
         self._was_running = running
         if not running:
             # Démarrage possible seulement matériel connecté (grisé sinon : on ne
@@ -1476,8 +1497,11 @@ class AlimSeqQtGUI(EditorMixin, ConfigMixin, SimMixin, QtWidgets.QMainWindow):
             if resp == QtWidgets.QMessageBox.Cancel:
                 event.ignore()
                 return
-            if resp == QtWidgets.QMessageBox.Save:
-                self._seq_save()
+            if resp == QtWidgets.QMessageBox.Save and not self._seq_save():
+                # Enregistrement annulé (« Enregistrer sous… ») ou en échec : ne pas
+                # fermer, sinon les modifications seraient perdues malgré « Enregistrer ».
+                event.ignore()
+                return
         self._settings.setValue("geometry", self.saveGeometry())
         if QtWidgets.QMessageBox.question(
                 self, self.tr("Quit"), self.tr("Switch off the supplies and quit?")
@@ -1541,6 +1565,16 @@ def install_language(app: QtWidgets.QApplication, lang: str) -> None:
     i18n.set_language(lang)  # domain layer (controller logs, reports…)
 
     if lang != "en":
+        # Catalogue Qt standard (boutons natifs Oui/Non/Annuler des QMessageBox,
+        # QDialogButtonBox…) : sans lui, ces libellés resteraient en anglais même
+        # en français. Fourni par PySide6 (répertoire des traductions Qt).
+        qt_dir = QtCore.QLibraryInfo.path(QtCore.QLibraryInfo.TranslationsPath)
+        for base in (f"qtbase_{lang}", f"qt_{lang}"):
+            qt_tr = QtCore.QTranslator()
+            if qt_dir and qt_tr.load(base, qt_dir):
+                app.installTranslator(qt_tr)
+                _installed_translators.append(qt_tr)
+                break
         qm = Path(__file__).resolve().parent / "i18n" / f"alim_seq_{lang}.qm"
         if qm.exists():
             translator = QtCore.QTranslator()

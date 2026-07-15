@@ -39,6 +39,11 @@ OK_GREEN = "#2E7D32"
 NEUTRAL = "#555555"
 DANGER = "#C62828"        # red: RESERVED for safety events
 SIM_BG = "#FFF3CD"        # simulation banner
+
+# Chart raster resolution. 300 dpi is the print target: the PNGs are scaled down
+# to the page/HTML width, so a higher dpi means crisper curves and text (font
+# sizes are in points, hence unchanged — only the pixel count grows).
+_CHART_DPI = 300
 SIM_FG = "#7A5B00"
 
 
@@ -610,6 +615,27 @@ def _series_from_csv(header, rows, suffix):
     return series
 
 
+def _exporter_vectoriel(fig, out_dir, stem: str) -> List[str]:
+    """Exports the figure in **vector** form (PDF + SVG) into ``<out_dir>/figures/``.
+
+    Vector = resolution-independent (infinitely sharp when zoomed/printed): PDF to
+    drop straight into an annex report, SVG to edit in Inkscape/Illustrator — the
+    practical equivalent of a MATLAB ``.fig`` for a shareable figure. Tolerant: a
+    missing backend or a write error never breaks report generation. Returns the
+    list of relative paths written."""
+    fig_dir = Path(out_dir) / "figures"
+    written: List[str] = []
+    for ext in ("pdf", "svg"):
+        try:
+            fig_dir.mkdir(parents=True, exist_ok=True)
+            fig.savefig(str(fig_dir / f"{stem}.{ext}"), facecolor="white",
+                        bbox_inches="tight", pad_inches=0.15)
+            written.append(f"figures/{stem}.{ext}")
+        except Exception:
+            pass
+    return written
+
+
 def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     """Plots V/I (two stacked panels) and temperatures with **matplotlib** (Agg
     backend, no window), from ``mesures.csv``, and writes two PNGs into
@@ -700,7 +726,7 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     has_temp = bool(temps)
     n_panels = 3 if has_temp else 2
     heights = [3.0] * n_panels
-    fig = Figure(figsize=(11, sum(heights) + 1.1), dpi=200)
+    fig = Figure(figsize=(11, sum(heights) + 1.1), dpi=_CHART_DPI)
     fig.set_facecolor("white")
     gs = fig.add_gridspec(len(heights), 1, height_ratios=heights, hspace=0.17)
 
@@ -748,6 +774,49 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     FigureCanvasAgg(fig)
     fig.savefig(str(out_dir / "courbes.png"), facecolor="white",
                 bbox_inches="tight", pad_inches=0.15)
+
+    # Annex vector exports: ONE standalone figure per quantity (separate files in
+    # figures/), rather than the combined multi-panel chart embedded in the report.
+    def _solo(series, colors, ylabel, stem, is_temp=False):
+        if not series:
+            return
+        import matplotlib.patheffects as pe
+        f = Figure(figsize=(11, 3.8), dpi=_CHART_DPI)
+        f.set_facecolor("white")
+        ax = f.add_subplot(111)
+        stroke = [pe.Stroke(linewidth=3.4, foreground="white", alpha=0.7), pe.Normal()]
+        for label in series:
+            xs, ys = _xy(series, label)
+            ax.plot(xs, ys, lw=2.0, solid_capstyle="round", color=colors[label],
+                    label=label, path_effects=stroke)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel(_("Time (s)"))
+        _style(ax)
+        ax.set_title(ylabel, fontsize=13, fontweight="bold", color=accent, pad=10)
+        if is_temp:
+            seuils = {name: (t.get("warning"), t.get("critical"))
+                      for name, t in (cfg.get("temperatures") or {}).items()
+                      if isinstance(t, dict)}
+            for w in sorted({s[0] for s in seuils.values() if s[0] is not None}):
+                ax.axhline(w, color=_WARN, ls="--", lw=1.0, alpha=0.85, zorder=1)
+            for cc in sorted({s[1] for s in seuils.values() if s[1] is not None}):
+                ax.axhline(cc, color=_CRIT, ls=":", lw=1.3, alpha=0.9, zorder=1)
+            from matplotlib.lines import Line2D
+            h, lab = ax.get_legend_handles_labels()
+            h += [Line2D([0], [0], color=_WARN, ls="--", lw=1.3),
+                  Line2D([0], [0], color=_CRIT, ls=":", lw=1.6)]
+            lab += [_("warning threshold"), _("critical threshold")]
+            _legend(ax, h, lab)
+        elif series:
+            _legend(ax)
+        f.subplots_adjust(left=0.09, right=0.83, top=0.91, bottom=0.14)
+        FigureCanvasAgg(f)
+        _exporter_vectoriel(f, out_dir, stem)
+
+    _solo(volts, col_ch, _("Measured voltage (V)"), "voltage")
+    _solo(currents, col_ch, _("Measured current (A)"), "current")
+    if has_temp:
+        _solo(temps, col_ts, _("Temperature (°C)"), "temperature", is_temp=True)
     out = {"courbes": "courbes.png"}
 
     # Zoom on the trip: ONLY if the outcome is a safety trip.
@@ -779,7 +848,7 @@ def _rendre_zoom(out_dir, temps, cfg, trip) -> Optional[str]:
     seuils = {n: (t.get("warning"), t.get("critical"))
               for n, t in (cfg.get("temperatures") or {}).items() if isinstance(t, dict)}
 
-    fig = Figure(figsize=(11, 4.2), dpi=200)
+    fig = Figure(figsize=(11, 4.2), dpi=_CHART_DPI)
     fig.set_facecolor("white")
     ax = fig.add_subplot(111)
     for label, pts in temps.items():
@@ -813,6 +882,7 @@ def _rendre_zoom(out_dir, temps, cfg, trip) -> Optional[str]:
     FigureCanvasAgg(fig)
     fig.savefig(str(Path(out_dir) / "courbes_zoom.png"), facecolor="white",
                 bbox_inches="tight", pad_inches=0.15)
+    _exporter_vectoriel(fig, out_dir, "courbes_zoom")   # figures/courbes_zoom.pdf + .svg
     return "courbes_zoom.png"
 
 

@@ -666,6 +666,12 @@ class Controller(RecordingMixin, ServoMixin, SimTuneMixin):
             self.log(_("Refused: safety active (tripped). Rearm before switching on."))
             return
         with self._lock_for(label):
+            # Re-check UNDER the lock (as in set_relay): a trip occurring between the
+            # test above and the acquisition must not let a switch-ON through — the
+            # channel powers the board directly, so this guard matters even more here.
+            if on and self._tripped:
+                self.log(_("Refused: safety active (tripped). Rearm before switching on."))
+                return
             inst, ch = self._route(label)
             inst.set_output(ch, bool(on))
         with self._state_lock:

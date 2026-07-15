@@ -68,7 +68,7 @@ class DividerSchematic(QtWidgets.QWidget):
         p.setBrush(col); p.drawEllipse(QtCore.QPoint(x, ynode), 3, 3); p.setBrush(QtCore.Qt.NoBrush)
         p.drawLine(x, ynode, x + 120, ynode)
         p.drawText(QtCore.QRect(x + 124, ynode - 9, W - x - 130, 18),
-                   QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, "→ ai (mesure)")
+                   QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, self.tr("→ ai (measured)"))
         box(y3, y4, lower, sensor=(lower == self.kind))
         # GND
         p.drawLine(x, y4, x, bot - 6)
