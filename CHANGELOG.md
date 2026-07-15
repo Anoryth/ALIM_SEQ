@@ -4,6 +4,24 @@ All notable changes to ALIM_SEQ are recorded here.
 Format inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning [SemVer](https://semver.org/).
 
+## [1.3.2] — 2026-07-15
+
+### Fixed
+- **Report readability with many events**: the event markers on the measurements
+  chart (numbered badge strip + vertical guides + legend tables in HTML/PDF) piled
+  up and drowned the curves on event-heavy sequences. They are removed — the
+  *Timeline* section already carries the full timestamped event list, and the
+  safety-trip zoom chart keeps its trip marker.
+- **CI version number**: manual (non-tag) builds clobbered the tracked
+  `alim_seq/_version.py` with a `0.0.0-dev` placeholder. Both workflows (GitHub and
+  Forgejo) now take the version from the git tag on tag builds and from the tracked
+  file otherwise, and share it with the Inno Setup step via the environment.
+- **Light theme on a dark-themed Windows**: the "light" palette came from
+  `standardPalette()`, which follows the SYSTEM color scheme since Qt 6.5 — on a
+  dark Windows the app ended up half dark with light-theme text (unreadable chart
+  cursor box, among others). The light palette is now explicit, and on Qt ≥ 6.8 the
+  native color scheme (title bar, menus) is aligned with the chosen theme.
+
 ## [1.3.1] — 2026-07-14
 
 ### Added

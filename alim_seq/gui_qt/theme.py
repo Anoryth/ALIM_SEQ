@@ -142,6 +142,34 @@ def dark_palette() -> QtGui.QPalette:
     return p
 
 
+def light_palette() -> QtGui.QPalette:
+    """Palette claire EXPLICITE (symétrique de :func:`dark_palette`).
+
+    Ne PAS utiliser ``app.style().standardPalette()`` : depuis Qt 6.5, Fusion
+    suit le schéma de couleurs du SYSTÈME — sur un Windows configuré en sombre,
+    la palette « standard » reste sombre alors que toutes les couleurs choisies
+    par le code (``is_dark() == False``) sont celles du clair → mélange
+    illisible (ex. cadre du curseur des graphes : fond sombre + texte noir)."""
+    p = QtGui.QPalette()
+    window, base, text = QtGui.QColor(240, 240, 240), QtCore.Qt.white, QtCore.Qt.black
+    p.setColor(QtGui.QPalette.Window, window)
+    p.setColor(QtGui.QPalette.WindowText, text)
+    p.setColor(QtGui.QPalette.Base, base)
+    p.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(247, 247, 247))
+    p.setColor(QtGui.QPalette.ToolTipBase, QtGui.QColor(255, 255, 220))
+    p.setColor(QtGui.QPalette.ToolTipText, text)
+    p.setColor(QtGui.QPalette.Text, text)
+    p.setColor(QtGui.QPalette.Button, window)
+    p.setColor(QtGui.QPalette.ButtonText, text)
+    p.setColor(QtGui.QPalette.Link, QtGui.QColor(21, 101, 192))
+    p.setColor(QtGui.QPalette.Highlight, QtGui.QColor(48, 140, 198))
+    p.setColor(QtGui.QPalette.HighlightedText, QtCore.Qt.white)
+    p.setColor(QtGui.QPalette.PlaceholderText, QtGui.QColor(120, 120, 120))
+    for role in (QtGui.QPalette.Text, QtGui.QPalette.ButtonText, QtGui.QPalette.WindowText):
+        p.setColor(QtGui.QPalette.Disabled, role, QtGui.QColor(120, 120, 120))
+    return p
+
+
 def apply_theme(dark: bool) -> None:
     """Pose la palette (claire/sombre) ET met à jour l'état de thème du module,
     de sorte que tout appel ultérieur à :func:`style`/:func:`pair` reflète le thème."""
@@ -149,4 +177,11 @@ def apply_theme(dark: bool) -> None:
     app = QtWidgets.QApplication.instance()
     if app is None:
         return
-    app.setPalette(dark_palette() if dark else app.style().standardPalette())
+    # Qt ≥ 6.8 : aligne aussi le schéma NATIF (barre de titre, menus système…)
+    # sur le thème choisi, indépendamment du réglage clair/sombre de l'OS.
+    try:
+        QtGui.QGuiApplication.styleHints().setColorScheme(
+            QtCore.Qt.ColorScheme.Dark if dark else QtCore.Qt.ColorScheme.Light)
+    except AttributeError:
+        pass
+    app.setPalette(dark_palette() if dark else light_palette())

@@ -13,8 +13,8 @@ Modules principaux :
     gui_qt       : interface graphique Qt (PySide6), l'unique IHM
 """
 
-# Version : générée au build depuis le tag git (alim_seq/_version.py, non versionné,
-# écrit par la CI). Repli pour une exécution depuis les sources sans tag.
+# Version : lue dans alim_seq/_version.py (suivi par git, source de vérité ;
+# réécrit par la CI depuis le tag git lors d'un build de release).
 try:
     from ._version import __version__
 except ImportError:

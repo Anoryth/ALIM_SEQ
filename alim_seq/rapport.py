@@ -432,7 +432,7 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
         parts.append(_section(_("Charts")))
         if sim:
             parts.append(_sim_bandeau())
-        captions = {"courbes": _("Measurements during the test (with events)"),
+        captions = {"courbes": _("Measurements during the test"),
                     "courbes_zoom": _("Zoom on the safety trip"),
                     "courbes_vi": _("Voltages and currents"), "courbes_temp": _("Temperatures")}
         for key, src_img in images.items():
@@ -444,9 +444,6 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
             # The actual width is fixed at print time (see exporter_pdf); this
             # value is only used for the HTML preview in a browser.
             parts.append(f"<p><img src='{_esc(src_img)}' width='620'></p>")
-            # Legend of the numbered markers carried on the measurements chart.
-            if key == "courbes":
-                parts.append(_reperes_evenements_html(dossier, header, rows))
 
     # --- Per-channel statistics ---
     parts.append(_section(_("Per-channel statistics")))
@@ -553,28 +550,6 @@ def construire_html(dossier, conclusion: str = "", images: Dict[str, str] = {}) 
     return "".join(parts)
 
 
-def _reperes_evenements_html(dossier, header: List[str], rows: List[List[str]]) -> str:
-    """Legend of the **numbered markers** carried on the measurements chart.
-
-    Uses the SAME list (and the same chronological order) as the chart's badges
-    (:func:`evenements`): the table's number ``n`` matches the chart's badge
-    ``n``. Empty if there is no event."""
-    evs = evenements(dossier, header, rows)
-    if not evs:
-        return ""
-    out = [f"<p class='muted' style='margin:6px 0 4px;'>"
-           f"{_('Event markers (numbers refer to the chart badges):')}</p>",
-           "<table width='100%'>"]
-    for i, e in enumerate(evs, start=1):
-        mm, ss = divmod(int(e["t_s"]), 60)
-        col = f" style='color:{DANGER}; font-weight:bold;'" if e["danger"] else ""
-        out.append(f"<tr><td align='center' width='34'><b>{i}</b></td>"
-                   f"<td align='right' width='70'>+{mm}:{ss:02d}</td>"
-                   f"<td{col}>{_esc(e['msg'])}</td></tr>")
-    out.append("</table>")
-    return "".join(out)
-
-
 def _chronologie_html(dossier: Path, meta: dict) -> str:
     """Log events, timestamped relative to the start of the test."""
     jp = dossier / "journal.log"
@@ -656,7 +631,6 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     if not header or not rows:
         return {}
     meta = _read_json(dossier / "essai.json")
-    evs = evenements(dossier, header, rows)
     trip = trip_info(meta, header, rows)
 
     volts = _series_from_csv(header, rows, "_Vmeas")
@@ -670,7 +644,6 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
     # serves as a series color if there are more than 7 channels (rare case).
     _CAT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e87ba4",
             "#eb6834", "#e34948"]
-    _MUTED = "#898781"      # discreet ink (axes, non-danger events)
     _WARN = "#d98c00"       # "warning" STATUS (warning threshold) — reserved, never a series
     _CRIT = "#d03b3b"       # "critical" STATUS (threshold + trip) — reserved
     accent = "#1F4E79"
@@ -720,41 +693,19 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         if series:
             _legend(ax)
 
-    # --- Anti-collision placement of events BEFORE sizing the figure.
-    # Each event gets a number (chronological order) reported in the report
-    # ("Event markers"): the chart only carries the NUMBER, no more overlapping
-    # text running across it.
-    for i, e in enumerate(evs, start=1):
-        e["_n"] = i
-    _allt = [t for s in (volts, currents, temps) for pts in s.values() for t, _v in pts]
-    t0v, t1v = (min(_allt), max(_allt)) if _allt else (0.0, 1.0)
-    min_dx = max(t1v - t0v, 1e-9) * 0.022      # two closer badges -> stacked
-    ev_row: List[int] = []
-    row_last: List[float] = []
-    for e in evs:
-        placed = next((r for r in range(len(row_last))
-                       if e["t_s"] - row_last[r] >= min_dx), -1)
-        if placed < 0:
-            placed = len(row_last)
-            row_last.append(e["t_s"])
-        else:
-            row_last[placed] = e["t_s"]
-        ev_row.append(placed)
-    n_rows = max(len(row_last), 1)
-
-    # A SINGLE multi-panel figure: event strip (optional) + V + I + temperatures.
-    # Shared time axis; held on a dedicated PDF page.
+    # A SINGLE multi-panel figure: V + I + temperatures. Shared time axis; held
+    # on a dedicated PDF page. No per-event chart markers: with many events they
+    # pile up and drown the curves — the "Timeline" section of the report already
+    # carries the full timestamped list.
     has_temp = bool(temps)
     n_panels = 3 if has_temp else 2
-    strip_h = (0.34 + 0.24 * n_rows) if evs else 0.0
-    heights = ([strip_h] if evs else []) + [3.0] * n_panels
+    heights = [3.0] * n_panels
     fig = Figure(figsize=(11, sum(heights) + 1.1), dpi=200)
     fig.set_facecolor("white")
     gs = fig.add_gridspec(len(heights), 1, height_ratios=heights, hspace=0.17)
 
-    off = 1 if evs else 0
-    ax_v = fig.add_subplot(gs[off])
-    ax_i = fig.add_subplot(gs[off + 1], sharex=ax_v)
+    ax_v = fig.add_subplot(gs[0])
+    ax_i = fig.add_subplot(gs[1], sharex=ax_v)
     _trace(ax_v, volts, col_ch, _("Measured voltage (V)"))
     _trace(ax_i, currents, col_ch, _("Measured current (A)"))
     ax_v.tick_params(labelbottom=False)
@@ -764,7 +715,7 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         seuils = {name: (t.get("warning"), t.get("critical"))
                   for name, t in (cfg.get("temperatures") or {}).items()
                   if isinstance(t, dict)}
-        ax_t = fig.add_subplot(gs[off + 2], sharex=ax_v)
+        ax_t = fig.add_subplot(gs[2], sharex=ax_v)
         import matplotlib.patheffects as pe
         stroke = [pe.Stroke(linewidth=3.4, foreground="white", alpha=0.7), pe.Normal()]
         for label in temps:
@@ -789,37 +740,8 @@ def rendre_graphiques(dossier, out_dir) -> Dict[str, str]:
         axes.append(ax_t)
 
     axes[-1].set_xlabel(_("Time (s)"))
-
-    # Vertical event guides on the panels (WITHOUT text): solid red (safety) or
-    # dashed grey (log), in the background.
-    for ax in axes:
-        for e in evs:
-            if e["danger"]:
-                ax.axvline(e["t_s"], color=_CRIT, lw=1.2, alpha=0.75, zorder=0)
-            else:
-                ax.axvline(e["t_s"], color=_MUTED, ls=(0, (2, 2)), lw=0.8,
-                           alpha=0.45, zorder=0)
-
-    # Event strip: NUMBERED badges stacked so they never overlap.
-    if evs:
-        ax_ev = fig.add_subplot(gs[0], sharex=ax_v)
-        ax_ev.set_ylim(-0.6, n_rows - 0.4)
-        ax_ev.set_yticks([])
-        for spn in ax_ev.spines.values():
-            spn.set_visible(False)
-        ax_ev.tick_params(labelbottom=False, length=0)
-        for e, r in zip(evs, ev_row):
-            y = n_rows - 1 - r
-            col = _CRIT if e["danger"] else _MUTED
-            ax_ev.plot([e["t_s"]], [y], marker="o", ms=13, mfc=col, mec="white",
-                       mew=1.0, zorder=4)
-            ax_ev.annotate(str(e["_n"]), xy=(e["t_s"], y), ha="center", va="center",
-                           fontsize=7.2, color="white", fontweight="bold", zorder=5)
-        title_ax = ax_ev
-    else:
-        title_ax = ax_v
-    title_ax.set_title(_("Measurements during the test"), fontsize=15, fontweight="bold",
-                       color=accent, pad=10)
+    ax_v.set_title(_("Measurements during the test"), fontsize=15, fontweight="bold",
+                   color=accent, pad=10)
 
     fig.align_ylabels(axes)
     fig.subplots_adjust(left=0.10, right=0.83, top=0.955, bottom=0.055)
@@ -1124,21 +1046,6 @@ def exporter_pdf(dossier, out_pdf, conclusion: str = "", images=None) -> None:
         sim_banner()
         if images.get("courbes"):
             image_flow(images["courbes"])
-            evs = evenements(dossier, header, rows)
-            if evs:
-                story.append(Paragraph(_("Event markers (numbers refer to the chart "
-                                         "badges):"), st_m))
-                ev_data, red = [], []
-                for i, e in enumerate(evs):
-                    mm2, ss = divmod(int(e["t_s"]), 60)
-                    style = st_cell_d if e["danger"] else st_cell
-                    ev_data.append([str(i + 1), f"+{mm2}:{ss:02d}",
-                                    Paragraph(esc(e["msg"]), style)])
-                    if e["danger"]:
-                        red.append((i, 1))
-                story.append(data_table([_("No."), _("Time"), _("Event")], ev_data,
-                                        [CW * 0.07, CW * 0.11, CW * 0.82],
-                                        right_from=99, red_cells=red))
         if images.get("courbes_zoom"):
             story.append(Spacer(1, 6))
             image_flow(images["courbes_zoom"])

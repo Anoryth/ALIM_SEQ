@@ -17,15 +17,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Version dérivée du tag git (ex: v1.2.3 -> 1.2.3). Écrite dans
-      # alim_seq/_version.py (lu par __init__.py -> titre/À propos de l'appli).
-      - name: Déterminer la version (tag git)
+      # Version : celle du tag git pour un build de tag (v1.2.3 -> 1.2.3), sinon
+      # (lancement manuel) celle du alim_seq/_version.py SUIVI par git — jamais
+      # écrasée par un 0.0.0-dev. La valeur résolue est réécrite dans
+      # alim_seq/_version.py (lu par __init__.py -> titre/À propos) et exportée
+      # en VER pour l'étape Inno Setup.
+      - name: Déterminer la version (tag git ou _version.py)
         shell: cmd
         run: |
-          set "VER=${{ github.ref_name }}"
-          if "%VER:~0,1%"=="v" (set "VER=%VER:~1%") else (set "VER=0.0.0-dev")
+          set "REF=${{ github.ref_name }}"
+          set "VER="
+          if "%REF:~0,1%"=="v" set "VER=%REF:~1%"
+          if not defined VER for /f "usebackq delims=" %%v in (`python -c "d={}; exec(open('alim_seq/_version.py').read(), d); print(d['__version__'])"`) do set "VER=%%v"
           echo Version : %VER%
           > alim_seq\_version.py echo __version__ = "%VER%"
+          >> "%GITHUB_ENV%" echo VER=%VER%
 
       - name: Install Python deps
         shell: cmd
@@ -61,8 +67,6 @@ jobs:
       - name: Build installer (Inno Setup)
         shell: cmd
         run: |
-          set "VER=${{ github.ref_name }}"
-          if "%VER:~0,1%"=="v" (set "VER=%VER:~1%") else (set "VER=0.0.0-dev")
           echo Version installateur : %VER%
           "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=%VER% packaging\ALIM_SEQ.iss
 
